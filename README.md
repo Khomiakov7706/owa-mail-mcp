@@ -68,6 +68,7 @@ claude mcp add owa-mail-demo -e OWA_MAIL_BACKEND=demo -e OWA_MAIL_ALLOW_SEND=1 -
 | `owa-mail-mcp setup` | Окно настройки (`--no-browser` — только вывести адрес) |
 | `owa-mail-mcp serve` | MCP-сервер по stdio |
 | `owa-mail-mcp check` | Проверить сохранённое подключение из терминала |
+| `owa-mail-mcp diagnose` | Показать, что сервер отвечает на адресах EWS и OWA (коды, перенаправления, способы входа), без паролей и содержимого |
 
 ### Где лежат настройки и переменные окружения
 

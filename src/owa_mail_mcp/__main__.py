@@ -4,6 +4,7 @@
   owa-mail-mcp setup      the setup window
   owa-mail-mcp serve      the stdio MCP server
   owa-mail-mcp check      tests the saved connection
+  owa-mail-mcp diagnose   shows what the server answers on the EWS and OWA addresses
 """
 
 from __future__ import annotations
@@ -98,9 +99,21 @@ def check() -> int:
     return 0
 
 
+def diagnose_cmd() -> int:
+    from .diagnose import diagnose
+    from .ews_backend import ews_endpoint
+
+    settings = Settings.load()
+    if not settings.server:
+        print("Not set up yet: run `owa-mail-mcp setup`.", file=sys.stderr)
+        return 1
+    print(diagnose(settings, ews_endpoint(settings.server)).text())
+    return 0
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="owa-mail-mcp", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", nargs="?", choices=["serve", "setup", "check"])
+    parser.add_argument("command", nargs="?", choices=["serve", "setup", "check", "diagnose"])
     parser.add_argument("--no-browser", action="store_true", help="setup: print the address instead of opening the browser")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
@@ -117,6 +130,8 @@ def main(argv: list[str] | None = None) -> None:
         run_setup(open_browser=not args.no_browser)
     elif command == "check":
         sys.exit(check())
+    elif command == "diagnose":
+        sys.exit(diagnose_cmd())
     else:
         serve()
 

@@ -81,10 +81,12 @@ class SetupApp:
         on_done: Callable[[], None] | None = None,
         backend_factory: Callable[[Settings], Any] | None = None,
         prober: Callable[[str, int], Any] = probe,
+        diagnoser: Callable[[Settings], Any] | None = None,
     ) -> None:
         self._on_done = on_done
         self._factory = backend_factory or _ews_backend
         self._probe = prober
+        self._diagnoser = diagnoser if diagnoser is not None else (_ews_diagnosis if backend_factory is None else None)
         self._lock = threading.Lock()
         self.app = LocalWebApp(load_page("setup_page.html"), host=host, port=port)
         self.app.get("api/state", lambda: (200, self.state()))
@@ -201,9 +203,9 @@ class SetupApp:
         except AuthenticationError:
             return 200, {"ok": False, "stage": "auth", "error": "Exchange не принял логин или пароль. Проверьте их; для входа Windows логин пишется как DOMAIN\\login."}
         except BackendError as exc:
-            return 200, {"ok": False, "stage": "exchange", "error": str(exc)}
+            return 200, {"ok": False, "stage": "exchange", "error": str(exc), "diagnosis": self._diagnose(settings)}
         except Exception as exc:  # exchangelib can raise its own types on odd servers
-            return 200, {"ok": False, "stage": "exchange", "error": f"{type(exc).__name__}: {exc}"}
+            return 200, {"ok": False, "stage": "exchange", "error": f"{type(exc).__name__}: {exc}", "diagnosis": self._diagnose(settings)}
         return 200, {
             "ok": True,
             "me": me.to_dict(),
@@ -213,6 +215,14 @@ class SetupApp:
                 for m in latest
             ],
         }
+
+    def _diagnose(self, settings: Settings) -> dict[str, Any] | None:
+        if self._diagnoser is None:
+            return None
+        try:
+            return self._diagnoser(settings).to_dict()
+        except Exception as exc:
+            return {"summary": f"Диагностика не удалась: {type(exc).__name__}: {exc}", "details": []}
 
     def trust_certificate(self, data: dict[str, Any]) -> tuple[int, Any]:
         server = str(data.get("server") or "").strip()
@@ -295,6 +305,13 @@ def _ews_backend(settings: Settings):
     from .ews_backend import EWSBackend
 
     return EWSBackend(settings)
+
+
+def _ews_diagnosis(settings: Settings):
+    from .diagnose import diagnose
+    from .ews_backend import ews_endpoint
+
+    return diagnose(settings, ews_endpoint(settings.server or ""))
 
 
 def _run_cli(argv: list[str], title: str) -> dict[str, Any]:

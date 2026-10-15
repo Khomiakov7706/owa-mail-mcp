@@ -282,7 +282,18 @@ async function runTest() {
   } else if (r.stage === "certificate") {
     showResult(certCard(r, form));
   } else {
-    showResult(el("div", { class: "result err" }, r.error || "Ошибка", r.detail ? el("div", { class: "hint" }, r.detail) : null));
+    const d = r.diagnosis;
+    const report = d ? [d.summary, "", ...d.details.map(x => "- " + x)].join("\n") : "";
+    const copyBtn = d ? el("button", { class: "small", onclick: async () => {
+      try { await navigator.clipboard.writeText(report); copyBtn.textContent = "Скопировано"; } catch { copyBtn.textContent = "Не удалось"; }
+    } }, "Скопировать диагностику") : null;
+    showResult(el("div", { class: "result err" },
+      d ? el("div", { style: "font-weight:600" }, d.summary) : (r.error || "Ошибка"),
+      d ? el("div", { class: "hint" }, "Сообщение библиотеки: " + r.error) : null,
+      r.detail ? el("div", { class: "hint" }, r.detail) : null,
+      d && d.details.length ? el("details", {}, el("summary", {}, "Что ответил сервер"),
+        el("pre", { class: "code mono", style: "color:var(--text)" }, d.details.join("\n\n"))) : null,
+      copyBtn ? el("div", { class: "actions", style: "margin-top:8px" }, copyBtn) : null));
   }
 }
 
