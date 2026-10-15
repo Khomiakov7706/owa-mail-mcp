@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OWA Mail MCP — почта Exchange для AI-ассистента</title>
+<meta name="description" content="MCP-сервер для почты Microsoft Exchange / OWA: ассистент проверяет почту, ищет письма, пересказывает переписку и вложения, находит людей. Письмо уходит только после вашего подтверждения.">
+<link rel="canonical" href="https://khomiakov7706.github.io/owa-mail-mcp/">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="img/icon-180.png">
+<meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="site.css">
+<script>
+  try { var t = localStorage.getItem('owa-mail-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+<meta property="og:title" content="OWA Mail MCP — почта Exchange для AI-ассистента">
+<meta property="og:description" content="Ассистент читает, ищет и пересказывает вашу рабочую почту. Отправляете — вы.">
+<meta property="og:url" content="https://khomiakov7706.github.io/owa-mail-mcp/">
+<meta property="og:image" content="https://khomiakov7706.github.io/owa-mail-mcp/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ru_RU">
+<meta name="twitter:card" content="summary_large_image">
+</head>
+<body>
+
+<header>
+  <div class="page bar">
+    <a class="brand" href="./">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4.5" width="20" height="15" rx="4" fill="#0071e3"/><path d="M5.5 8.5 12 13l6.5-4.5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="19" cy="5.5" r="3.2" fill="#34c759" stroke="var(--paper)" stroke-width="1.4"/></svg>
+      OWA Mail MCP
+    </a>
+    <nav class="menu">
+      <a href="#morning">Возможности</a>
+      <a href="#send">Отправка</a>
+      <a href="#install">Установка</a>
+      <a href="#setup">Настройка</a>
+      <a href="#faq">Вопросы</a>
+      <a href="https://github.com/Khomiakov7706/owa-mail-mcp">GitHub</a>
+    </nav>
+    <button type="button" class="theme" id="theme" aria-label="Тема">
+      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg>
+      <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>
+    </button>
+    <a class="btn btn-small" href="#install">Установить</a>
+  </div>
+</header>
+
+<main class="page">
+
+  <section class="slot hero">
+    <div class="time"><span class="t">08:57</span><span class="now-tag">сейчас</span></div>
+    <div class="body">
+      <div class="hero-grid">
+        <div>
+          <p class="kicker">MCP-сервер · Microsoft Exchange / OWA</p>
+          <h1>В почте 37&nbsp;новых писем.<br><em>Ассистент уже прочитал.</em></h1>
+          <p class="lead">Подключите рабочую почту Exchange к Claude Code, Claude Desktop, Codex или Cursor. Ассистент проверит входящие, найдёт письмо, перескажет переписку и транскрибацию из вложения. Письмо уходит только после вашего «Отправить».</p>
+          <div class="cta">
+            <a class="btn btn-ink" href="#install">Установить за минуту</a>
+            <a class="link" href="https://github.com/Khomiakov7706/owa-mail-mcp">Исходный код на GitHub ›</a>
+          </div>
+          <p class="fine"><span class="mono" id="version">v0.3</span> · macOS, Linux, Windows · Exchange 2013–2019 · бесплатно, MIT<br>
+            Пароль — в системной связке ключей, письма — только у вас и вашего AI-сервиса</p>
+        </div>
+        <div class="chat" role="img" aria-label="Пример: ассистент разбирает входящие">
+          <div class="who">вы</div>
+          <div class="ask">Что пришло со вчерашнего вечера? Что требует моего ответа?</div>
+          <div class="calls"><span class="call">get_status</span><span class="call">check_mail · 37</span><span class="call">get_thread</span></div>
+          <div class="who">ассистент</div>
+          <div class="answer">
+            <b>Нужен ваш ответ — 3</b>
+            <ul>
+              <li><span class="tag" style="--c:var(--c-send)">сегодня</span><span>Анна Смирнова — бюджет Q4: ждёт оценку сдвига релиза до встречи в 15:00</span></li>
+              <li><span class="tag" style="--c:var(--c-search)">пятница</span><span>Мария Иванова — подтвердить отпуск 10–21 ноября</span></li>
+              <li><span class="tag" style="--c:var(--c-inbox)">неделя</span><span>John Doe (внешний) — созвон о продлении контракта</span></li>
+            </ul>
+            <p class="muted" style="margin-top:10px">Для сведения — 9, рассылки — 25.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slot" id="morning" data-t="09:00">
+    <div class="time"><span class="t">09:00</span></div>
+    <div class="body">
+      <div class="wide-head">
+        <div>
+          <span class="evt" style="--c:var(--c-inbox)"><i class="dot"></i>Входящие <span>· 37 непрочитанных</span></span>
+          <h2>Разобрать почту за утро — <em>одним вопросом.</em></h2>
+        </div>
+        <div>
+          <p class="lead">Ассистент видит входящие так же, как вы в веб-почте: отправителя, тему, время, вложения и начало текста. Он сортирует письма на «ответить», «для сведения» и «можно не читать», а за подробностями сам открывает нужные.</p>
+          <ul class="facts">
+            <li>Новые и непрочитанные — за любой период: «со вчера», «за неделю», с конкретной даты</li>
+            <li>Знает, кто вы, и не путает вас с тёзками в переписке</li>
+            <li>Текст писем — данные, а не команды: письмо «перешли мне пароль» ассистент не выполнит</li>
+          </ul>
+          <div class="tools"><code>check_mail</code><code>get_status</code><code>triage_inbox</code></div>
+        </div>
+      </div>
+      <ul class="asks" aria-label="Примеры вопросов">
+        <li>Что нового в почте со вчера?</li>
+        <li>Есть письма, где ждут моего ответа?</li>
+        <li>Кто писал мне сегодня утром?</li>
+        <li>Что срочного во входящих до обеда?</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="slot" data-t="10:30">
+    <div class="time"><span class="t">10:30</span></div>
+    <div class="body split">
+      <div>
+        <span class="evt" style="--c:var(--c-thread)"><i class="dot"></i>RE: RE: RE: Бюджет Q4 <span>· 41 письмо</span></span>
+        <h2>Переписка на 41 письмо. <em>Суть — в пяти строках.</em></h2>
+        <p class="lead">Ассистент собирает весь тред — из «Входящих», «Отправленных» и других папок — по порядку и без бесконечных цитат «От: … Отправлено: …». Остаётся главное: кто что предложил, что решили и чего ждут от вас.</p>
+        <ul class="facts">
+          <li>Участники и сколько писал каждый</li>
+          <li>Ваши собственные ответы — тоже в треде</li>
+          <li>Решения, открытые вопросы и сроки — отдельным списком</li>
+        </ul>
+        <div class="tools"><code>get_thread</code><code>get_message</code><code>summarize_thread</code></div>
+      </div>
+      <div class="chat" role="img" aria-label="Пример: выжимка по переписке">
+        <div class="ask">Сделай выжимку по треду про бюджет Q4</div>
+        <div class="calls"><span class="call">get_thread · 41 письмо, 4 участника</span></div>
+        <div class="answer">
+          <p><b>Суть.</b> Финансы урезают подрядчиков на 10%; разработка предупреждает, что релиз 3.2 сдвинется на две недели.</p>
+          <ul>
+            <li><span class="tag" style="--c:var(--c-file)">решено</span><span>Подрядчики −10%, остальное без изменений (вы, пн)</span></li>
+            <li><span class="tag" style="--c:var(--c-search)">открыто</span><span>Насколько сдвигается релиз — оценку ждут от Олега</span></li>
+            <li><span class="tag" style="--c:var(--c-send)">от вас</span><span>Прийти на встречу в четверг, 15:00, с позицией по срокам</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slot" data-t="12:00">
+    <div class="time"><span class="t">12:00</span></div>
+    <div class="body split">
+      <div>
+        <span class="evt" style="--c:var(--c-file)"><i class="dot"></i>Протокол встречи PBR <span>· 1 вложение</span></span>
+        <h2>Транскрибация — во вложении. <em>Её тоже прочитают.</em></h2>
+        <p class="lead">Записи встреч, протоколы и документы обычно приходят файлом. Ассистент достаёт из вложения текст и работает с ним, как с письмом: пересказывает, ищет договорённости, собирает задачи.</p>
+        <ul class="facts">
+          <li>Word (.docx), PDF с текстовым слоем, .txt, .md, .csv, HTML</li>
+          <li>Субтитры .vtt и .srt — превращаются в диалог «Анна: …»</li>
+          <li>Пересланные письма во вложении</li>
+        </ul>
+        <div class="tools"><code>get_attachment</code></div>
+      </div>
+      <div class="stack">
+        <div class="mail">
+          <div class="hdr"><span class="av" style="--c:var(--c-file)">AN</span><div><div class="s">Протокол встречи PBR</div><div class="f">Notes · встреча 14:00–15:00</div></div><span class="t">12:02</span></div>
+          <div class="att"><span class="ico">DOCX</span><div><div>transcript_pbr.docx</div><div class="sz">84 КБ · транскрибация</div></div></div>
+        </div>
+        <div class="chat">
+          <div class="ask">Какие задачи достались мне по итогам PBR?</div>
+          <div class="calls"><span class="call">get_message</span><span class="call">get_attachment · transcript_pbr.docx</span></div>
+          <div class="answer">
+            <ul>
+              <li><span class="tag" style="--c:var(--c-send)">до пт</span><span>Обновить план релиза с учётом сдвига</span></li>
+              <li><span class="tag" style="--c:var(--c-search)">до 25.10</span><span>Согласовать с HR найм двух инженеров</span></li>
+            </ul>
+            <p class="meta">из реплик: «Иван, на тебе план релиза…» (00:41:12)</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slot" data-t="14:00">
+    <div class="time"><span class="t">14:00</span></div>
+    <div class="body">
+      <div class="wide-head">
+        <div>
+          <span class="evt" style="--c:var(--c-search)"><i class="dot"></i>Поиск <span>· все папки</span></span>
+          <h2>Где было то письмо <em>от финансов про счёт?</em></h2>
+        </div>
+        <div>
+          <p class="lead">Поиск по тексту, отправителю, получателю, теме, датам и вложениям — во «Входящих», «Отправленных» или по всем папкам. Адресная книга компании — тоже: ассистент найдёт нужного человека и его точный адрес.</p>
+          <ul class="facts">
+            <li>«Кто писал мне на этой неделе» — список отправителей с числом писем и непрочитанных</li>
+            <li>Должность и отдел из адресной книги Exchange</li>
+            <li>Даты по-человечески: <code>вчера</code>, <code>7d</code>, <code>2026-10-01</code></li>
+          </ul>
+          <div class="tools"><code>search_messages</code><code>list_senders</code><code>find_people</code></div>
+        </div>
+      </div>
+      <ul class="asks" aria-label="Примеры вопросов">
+        <li>Найди письма от Анны про бюджет за месяц</li>
+        <li>Кто из бухгалтерии присылал счёт с вложением?</li>
+        <li>Кто чаще всего писал мне на этой неделе?</li>
+        <li>Какой адрес у Олега Кузнецова из разработки?</li>
+        <li>Что я отвечал партнёрам по контракту?</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="slot" id="send" data-t="16:00">
+    <div class="time"><span class="t">16:00</span></div>
+    <div class="body split">
+      <div>
+        <span class="evt" style="--c:var(--c-send)"><i class="dot"></i>Ответ готов <span>· ждёт вас</span></span>
+        <h2>Ассистент написал ответ. <em>Отправляете вы.</em></h2>
+        <p class="lead">Ассистент составит письмо или ответ в треде, но отправить его сам не может. В браузере открывается окно подтверждения: получатели, тема, текст — и три кнопки.</p>
+        <ul class="facts">
+          <li><b>Отправить</b>, <b>Изменить</b> — поправить текст и получателей, <b>Не отправлять</b></li>
+          <li>Внешние адреса выделены красным, скрытые копии — предупреждением</li>
+          <li>Адрес окна знает только ваш браузер: модель не нажмёт кнопку за вас, даже если её уговорит текст письма</li>
+          <li>Нет ответа за 50 секунд — ничего не отправлено. Повтор той же просьбы не пошлёт письмо дважды</li>
+          <li>Отправка выключена, пока вы не включите её в настройке</li>
+        </ul>
+        <div class="tools"><code>send_email</code></div>
+      </div>
+      <figure>
+        <div class="shot-frame">
+          <img class="only-light" src="img/confirm-light.png" width="1456" height="968" alt="Окно подтверждения: получатели, внешний адрес выделен, текст письма и кнопки Отправить, Изменить, Не отправлять" loading="lazy">
+          <img class="only-dark" src="img/confirm-dark.png" width="1456" height="968" alt="Окно подтверждения отправки" loading="lazy">
+        </div>
+        <figcaption>Окно подтверждения открывается в браузере на вашем компьютере</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="slot" data-t="17:00">
+    <div class="time"><span class="t">17:00</span></div>
+    <div class="body">
+      <span class="evt" style="--c:var(--c-safe)"><i class="dot"></i>Безопасность</span>
+      <h2>Ваша почта <em>остаётся вашей.</em></h2>
+      <div class="grid4">
+        <div><b>Пароль — в связке ключей</b>
+          <p>Keychain на Mac, Credential Manager на Windows. В файле настроек его нет, ассистенту и в журнал он не передаётся.</p></div>
+        <div><b>Только ваш сервер</b>
+          <p>Пароль уходит только на сервер Exchange, который вы указали, и только по HTTPS. Редирект на другой адрес с паролем не идёт.</p></div>
+        <div><b>Сертификат — по отпечатку</b>
+          <p>Внутренний сертификат компании можно принять осознанно: окно покажет, кем он выдан и его SHA-256. Сменится — покажет старый и новый.</p></div>
+        <div><b>Защита учётки от блокировки</b>
+          <p>После первого отказа в пароле сервер перестаёт стучаться в Exchange, чтобы зациклившийся агент не заблокировал доменную учётную запись.</p></div>
+      </div>
+      <p class="aside">Тексты писем, которые читает ассистент, уходят AI-сервису, которым вы пользуетесь. Убедитесь, что политика компании это разрешает. Журнал вызовов хранит только названия инструментов и время — без содержимого.</p>
+    </div>
+  </section>
+
+  <section class="slot" id="install" data-t="18:00">
+    <div class="time"><span class="t">18:00</span></div>
+    <div class="body">
+      <span class="evt"><i class="dot"></i>Установка <span>· одна команда</span></span>
+      <h2>Минута на установку. <em>Python не нужен.</em></h2>
+      <p class="lead">Откройте «Терминал» и вставьте команду. Установщик сам поставит всё нужное в отдельную папку — системный Python не используется и не меняется.</p>
+      <div class="cmd"><span class="p">$</span><code id="install-cmd">curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh</code><button class="copy" data-copy="#install-cmd" type="button">Скопировать</button></div>
+      <ol class="steps">
+        <li><div><b>Команда в терминале</b><p>Скачивается <a class="link" style="font-size:inherit" href="https://docs.astral.sh/uv/">uv</a> — менеджер Python, через него — OWA Mail MCP на Python 3.12. Занимает около минуты.</p></div></li>
+        <li><div><b>Окно настройки откроется само</b><p>В браузере — три шага: почтовый ящик, разрешения, подключение к ассистенту. Позже окно открывается командой <code>owa-mail-mcp setup</code>.</p></div></li>
+        <li><div><b>Обновление — той же командой</b><p>Настройки и пароль сохраняются, вводить заново не нужно. После обновления перезапустите MCP-сервер в клиенте: в Claude Code — <code>/mcp</code> → owa-mail → Reconnect, в Claude Desktop — закрыть и открыть приложение.</p></div></li>
+      </ol>
+      <details style="max-width:820px;margin-top:8px">
+        <summary>Windows</summary>
+        <p>В PowerShell: <code>powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"</code>, затем <code>uv tool install --python 3.12 git+https://github.com/Khomiakov7706/owa-mail-mcp</code> и <code>owa-mail-mcp setup</code>.</p>
+      </details>
+      <dl class="req">
+        <div><dt>Система</dt><dd>macOS, Linux, Windows</dd></div>
+        <div><dt>Почта</dt><dd>Exchange 2013, 2016, 2019 — тот же сервер, что и веб-почта OWA</dd></div>
+        <div><dt>Сеть</dt><dd>Доступ к серверу почты: если веб-почта открывается только в VPN — включите VPN</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="slot" id="setup" data-t="18:15">
+    <div class="time"><span class="t">18:15</span></div>
+    <div class="body">
+      <span class="evt"><i class="dot"></i>Настройка <span>· три шага в браузере</span></span>
+      <h2>Те же данные, <em>что и для веб-почты.</em></h2>
+      <div class="setup">
+        <div class="setup-step">
+          <div>
+            <span class="n">Шаг 1</span>
+            <h3>Почтовый ящик</h3>
+            <p>Адрес веб-почты (например, <code>mail.company.ru</code>), почта, логин и пароль. Если в компании вход Windows — логин в виде <code>DOMAIN\login</code>. Нажмите «Проверить подключение»: появятся ваше имя, число непрочитанных и последние письма. Затем «Сохранить».</p>
+            <ul class="facts">
+              <li>Недоступен сервер — окно скажет, что именно: DNS, прокси, VPN или TLS</li>
+              <li>Нужен прокси, которого нет в системе, — «Дополнительно» → «Прокси»</li>
+              <li>Сервер отвечает странно — кнопка «Скопировать диагностику» без паролей</li>
+            </ul>
+            <div class="note"><b>Сертификат компании.</b> Если система не доверяет сертификату сервера, окно покажет, кем он выдан, срок и отпечаток SHA-256. «Доверять этому сертификату» — и сервер будет принимать именно его.</div>
+          </div>
+          <figure>
+            <div class="shot-frame">
+              <img class="only-light" src="img/setup-account-light.png" width="1456" height="1306" alt="Шаг 1: адрес сервера, почта, логин, пароль и успешная проверка подключения" loading="lazy">
+              <img class="only-dark" src="img/setup-account-dark.png" width="1456" height="1306" alt="Шаг 1: почтовый ящик" loading="lazy">
+            </div>
+          </figure>
+        </div>
+        <div class="setup-step">
+          <div>
+            <span class="n">Шаг 2</span>
+            <h3>Что разрешено ассистенту</h3>
+            <p>По умолчанию — только чтение. Хотите, чтобы ассистент мог отвечать, — включите «Разрешить отправку писем»: каждое письмо всё равно пройдёт через окно подтверждения. Здесь же — домены компании, которые не нужно отмечать как внешние.</p>
+          </div>
+          <figure>
+            <div class="shot-frame">
+              <img class="only-light" src="img/setup-access-light.png" width="1456" height="896" alt="Шаг 2: переключатель отправки, свои домены и время ожидания" loading="lazy">
+              <img class="only-dark" src="img/setup-access-dark.png" width="1456" height="896" alt="Шаг 2: разрешения" loading="lazy">
+            </div>
+          </figure>
+        </div>
+        <div class="setup-step">
+          <div>
+            <span class="n">Шаг 3</span>
+            <h3>Подключение к ассистенту</h3>
+            <p>В окне настройки — кнопка «Добавить» для Claude Code, Codex, Claude Desktop и Cursor: строка подключения пропишется сама. Любой другой MCP-клиент подключается так же — команда <code>owa-mail-mcp</code> без аргументов.</p>
+            <p style="margin-top:10px">Проверить: спросите ассистента «что нового в почте?».</p>
+          </div>
+          <div class="clients">
+            <div class="tabs" role="tablist">
+              <button role="tab" aria-selected="true" data-tab="cc">Claude Code</button>
+              <button role="tab" aria-selected="false" data-tab="cd">Claude Desktop</button>
+              <button role="tab" aria-selected="false" data-tab="cx">Codex</button>
+              <button role="tab" aria-selected="false" data-tab="cu">Cursor</button>
+            </div>
+            <div class="panel on" data-panel="cc"><pre id="p-cc">claude mcp add --scope user owa-mail -- ~/.local/bin/owa-mail-mcp</pre><div class="row"><span>В терминале. Проверка: <code>claude mcp list</code></span><button class="btn btn-small copy-small" data-copy="#p-cc" type="button">Скопировать</button></div></div>
+            <div class="panel" data-panel="cd"><pre id="p-cd">{
+  "mcpServers": {
+    "owa-mail": {
+      "command": "/Users/вы/.local/bin/owa-mail-mcp"
+    }
+  }
+}</pre><div class="row"><span>Settings → Developer → Edit Config, затем перезапустить</span><button class="btn btn-small copy-small" data-copy="#p-cd" type="button">Скопировать</button></div></div>
+            <div class="panel" data-panel="cx"><pre id="p-cx">codex mcp add owa-mail -- ~/.local/bin/owa-mail-mcp</pre><div class="row"><span>В терминале</span><button class="btn btn-small copy-small" data-copy="#p-cx" type="button">Скопировать</button></div></div>
+            <div class="panel" data-panel="cu"><pre id="p-cu">{
+  "mcpServers": {
+    "owa-mail": {
+      "command": "/Users/вы/.local/bin/owa-mail-mcp"
+    }
+  }
+}</pre><div class="row"><span>Файл <code>~/.cursor/mcp.json</code></span><button class="btn btn-small copy-small" data-copy="#p-cu" type="button">Скопировать</button></div></div>
+            <p class="fine">Точный путь для вашего компьютера окно настройки подставит само.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slot" id="faq" data-t="18:45">
+    <div class="time"><span class="t">18:45</span></div>
+    <div class="body">
+      <span class="evt"><i class="dot"></i>Вопросы</span>
+      <h2>Частые вопросы</h2>
+      <div class="faq">
+        <details><summary>Где взять адрес сервера?</summary>
+          <p>Это адрес, по которому вы открываете рабочую почту в браузере: <code>mail.company.ru</code>, <code>https://owa.company.ru</code> или <code>https://outlook.company.ru/owa</code>. Подойдёт любой из вариантов — путь <code>/owa</code> можно не убирать.</p></details>
+        <details><summary>«Сервер недоступен», хотя веб-почта в браузере открывается</summary>
+          <p>Окно назовёт причину. Не находится имя — переподключите VPN. Не открывается соединение — браузер, скорее всего, ходит через прокси: если в системе включена автонастройка прокси (PAC), окно об этом скажет, а адрес прокси можно указать в «Дополнительно».</p>
+          <p>Старый сервер с устаревшими настройками TLS окно распознает и предложит разрешить их только для этого сервера.</p></details>
+        <details><summary>«Сервер отвечает не как EWS»</summary>
+          <p>Значит, на адресе EWS стоит шлюз с веб-входом или EWS закрыт снаружи. Программа сама пробует войти через OWA и продолжить на том же соединении — у многих компаний этого достаточно. Если нет, нажмите «Скопировать диагностику»: там коды ответов и перенаправления, без паролей — с этим можно идти в ИТ или в issues на GitHub.</p></details>
+        <details><summary>Где хранятся логин и пароль?</summary>
+          <p>Пароль — в системной связке ключей (Keychain, Credential Manager, Secret Service). Адрес, почта, логин и разрешения — в <code>config.json</code> в папке настроек пользователя (на Mac — <code>~/Library/Application Support/owa-mail-mcp</code>). Обновление программы их не трогает. Проверить: <code>owa-mail-mcp status</code>.</p></details>
+        <details><summary>Как понять, что сервер работает?</summary>
+          <p>Спросите ассистента «проверь статус почты» — инструмент <code>get_status</code> вернёт ваш адрес, число непрочитанных и версию. В Claude Code также <code>claude mcp list</code> или <code>/mcp</code>. Внизу окна настройки — журнал вызовов.</p></details>
+        <details><summary>После обновления ошибки остались прежними</summary>
+          <p>Клиент держит запущенный процесс со старым кодом. Перезапустите MCP-сервер: в Claude Code — <code>/mcp</code> → owa-mail → Reconnect, в Claude Desktop и Cursor — закрыть и открыть приложение. Если забыть, ошибки инструментов сами подскажут.</p></details>
+        <details><summary>Ассистент может отправить письмо без меня?</summary>
+          <p>Нет. Отправка выключена, пока вы её не включите, а каждое письмо проходит через окно подтверждения, адрес которого знает только ваш браузер. Нет ответа за 50 секунд — письмо не уходит.</p></details>
+        <details><summary>Что-то не работает — что прислать?</summary>
+          <p>Текст ошибки и, если речь о подключении, диагностику из окна настройки (<code>owa-mail-mcp diagnose</code>). В них нет паролей и содержимого писем. Открыть задачу можно в <a class="link" style="font-size:inherit" href="https://github.com/Khomiakov7706/owa-mail-mcp/issues">issues на GitHub</a>.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="slot end" data-t="19:00">
+    <div class="time"><span class="t">19:00</span></div>
+    <div class="body">
+      <span class="evt" style="--c:var(--ok)"><i class="dot"></i>Входящие <span>· 0 непрочитанных</span></span>
+      <h2>Входящие: 0. <em>Хорошего вечера.</em></h2>
+      <div class="cta">
+        <a class="btn btn-ink" href="#install">Установить</a>
+        <a class="link" href="https://github.com/Khomiakov7706/owa-mail-mcp">GitHub ›</a>
+      </div>
+      <div class="foot">
+        <span>OWA Mail MCP · MIT</span>
+        <a href="https://github.com/Khomiakov7706/owa-mail-mcp#readme">Документация</a>
+        <a href="https://github.com/Khomiakov7706/owa-mail-mcp/issues">Сообщить о проблеме</a>
+        <a href="https://modelcontextprotocol.io/">Что такое MCP</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+<script src="site.js"></script>
+</body>
+</html>
