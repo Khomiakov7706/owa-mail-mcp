@@ -24,6 +24,7 @@ from exchangelib import (
     HTMLBody,
     Mailbox,
     Q,
+    close_connections,
 )
 from exchangelib import Message as EwsMessage
 from exchangelib.errors import (
@@ -92,6 +93,9 @@ class EWSBackend:
             raise BackendError(f"Unknown OWA_MAIL_AUTH {settings.auth_type!r}; use one of {', '.join(_AUTH_TYPES)}.")
         self._settings = settings
         PinningAdapter.pins = dict(settings.trusted_certificates)
+        # exchangelib caches protocols and keeps their connections open; a connection made under an
+        # old pin (or old password) must not carry over to the new settings.
+        close_connections()
         self._auth = auth
         self._endpoint = ews_endpoint(settings.server or "")
         self._account: Account | None = None
@@ -111,9 +115,15 @@ class EWSBackend:
                     credentials=Credentials(username=s.username or s.email or "", password=s.password or ""),
                     auth_type=self._auth,
                 )
-                self._account = self._call(lambda: Account(
-                    primary_smtp_address=s.email, config=config, autodiscover=False, access_type=DELEGATE,
-                ))
+                def connect() -> Account:
+                    account = Account(primary_smtp_address=s.email, config=config, autodiscover=False, access_type=DELEGATE)
+                    # exchangelib asks the server for its version lazily, but protocol-level calls such as
+                    # resolve_names read it without asking and fail on None. Asking now also checks the
+                    # password and the certificate on the first call, where the errors make sense.
+                    account.version  # noqa: B018
+                    return account
+
+                self._account = self._call(connect)
             return self._account
 
     @staticmethod
@@ -134,7 +144,12 @@ class EWSBackend:
                     "The Exchange server's certificate is not trusted (or changed since the user trusted it). "
                     "Ask the user to run `owa-mail-mcp setup` and check the certificate."
                 ) from exc
-            raise BackendError(f"Cannot reach Exchange ({type(exc).__name__}). Is the VPN on?") from exc
+            if "No valid version headers" in text or "No ServerVersionInfo" in text:
+                raise BackendError(
+                    "The server answered, but not like Exchange Web Services: check the server address "
+                    "(the one you open webmail with) and that EWS is enabled."
+                ) from exc
+            raise BackendError(f"Cannot reach Exchange: {text[:300]}. Is the VPN on?") from exc
         except (ConnectionError, TimeoutError) as exc:
             raise BackendError(f"Cannot reach Exchange ({type(exc).__name__}). Is the VPN on?") from exc
 
