@@ -37,10 +37,21 @@ EXE="$BIN_DIR/owa-mail-mcp"
 "$UV" tool update-shell >/dev/null 2>&1 || true
 
 say ""
-say "==> Готово: $EXE"
-say "    Открываю окно настройки. Позже его можно открыть командой: owa-mail-mcp setup"
-say ""
+VERSION="$("$EXE" status 2>/dev/null | head -n 1 || true)"
+say "==> Готово: ${VERSION:-owa-mail-mcp} ($EXE)"
+
+# Settings live outside the program (config.json and the system keyring), so an update keeps
+# them. Open the setup window only when there is nothing to keep yet.
+if "$EXE" status >/dev/null 2>&1; then
+    say "    Настройки сохранены, вводить их заново не нужно."
+    say "    Перезапустите MCP-сервер в клиенте, чтобы он подхватил новую версию:"
+    say "      Claude Code: /mcp → owa-mail → Reconnect;  Claude Desktop, Cursor: закрыть и открыть приложение."
+    say "    Окно настройки: owa-mail-mcp setup"
+    exit 0
+fi
 if [ "${OWA_MAIL_MCP_NO_SETUP:-}" = "1" ]; then
     exit 0
 fi
+say "    Открываю окно настройки. Позже его можно открыть командой: owa-mail-mcp setup"
+say ""
 exec "$EXE" setup </dev/null

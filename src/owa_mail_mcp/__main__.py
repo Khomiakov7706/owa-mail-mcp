@@ -4,6 +4,7 @@
   owa-mail-mcp setup      the setup window
   owa-mail-mcp serve      the stdio MCP server
   owa-mail-mcp check      tests the saved connection
+  owa-mail-mcp status     version, where the settings are, whether the setup is complete (exit 0) or not (exit 2)
   owa-mail-mcp diagnose   shows what the server answers on the EWS and OWA addresses
 """
 
@@ -76,6 +77,25 @@ def serve() -> None:
         launcher.stop()
 
 
+def status() -> int:
+    from . import __version__
+    from .config import config_path
+
+    settings = Settings.load()
+    path = config_path()
+    print(f"owa-mail-mcp {__version__}")
+    print(f"settings: {path}" + ("" if path.exists() else " (not created yet)"))
+    if settings.backend == "demo":
+        print("mailbox: demo")
+        return 0
+    print(f"server:   {settings.server or '-'}")
+    print(f"email:    {settings.email or '-'}")
+    print(f"login:    {settings.login or '-'}")
+    print(f"password: {'saved' if settings.password else 'missing'}")
+    print(f"sending:  {'allowed' if settings.allow_send else 'off'}")
+    return 0 if settings.is_configured else 2
+
+
 def check() -> int:
     from .backend import SearchQuery
 
@@ -113,7 +133,7 @@ def diagnose_cmd() -> int:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="owa-mail-mcp", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", nargs="?", choices=["serve", "setup", "check", "diagnose"])
+    parser.add_argument("command", nargs="?", choices=["serve", "setup", "check", "status", "diagnose"])
     parser.add_argument("--no-browser", action="store_true", help="setup: print the address instead of opening the browser")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
@@ -130,6 +150,8 @@ def main(argv: list[str] | None = None) -> None:
         run_setup(open_browser=not args.no_browser)
     elif command == "check":
         sys.exit(check())
+    elif command == "status":
+        sys.exit(status())
     elif command == "diagnose":
         sys.exit(diagnose_cmd())
     else:

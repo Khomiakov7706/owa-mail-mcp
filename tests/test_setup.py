@@ -169,3 +169,15 @@ async def test_unconfigured_server_opens_setup_and_journals_calls():
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
+
+
+def test_status_tells_the_installer_whether_to_open_setup(isolated, capsys):
+    from owa_mail_mcp.__main__ import status
+
+    assert status() == 2
+    config.save_settings(Settings(server="owa.corp.ru", email="ivan@corp.ru", username="CORP\\ivan"))
+    assert status() == 2  # no password yet
+    isolated["CORP\\ivan"] = "secret"
+    assert status() == 0
+    out = capsys.readouterr().out
+    assert "password: saved" in out and "secret" not in out
