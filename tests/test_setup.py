@@ -34,9 +34,9 @@ class Prober:
     def __init__(self, fingerprint=FP, trusted=True, down=False):
         self.fingerprint, self.trusted, self.down = fingerprint, trusted, down
 
-    def __call__(self, host, port):
+    def __call__(self, host, port, legacy_ok=False):
         if self.down:
-            raise ServerUnreachable(f"{host}:{port} — ConnectionRefusedError")
+            raise ServerUnreachable(f"{host}:{port}", "connect", "ConnectionRefusedError: [Errno 61] Connection refused")
         return CertificateInfo(host=host, port=port, fingerprint=self.fingerprint, trusted_by_system=self.trusted,
                                system_error=None if self.trusted else "self-signed certificate", subject="commonName=mail.corp.ru")
 
@@ -83,7 +83,7 @@ def test_untrusted_certificate_is_shown_then_pinned():
 
 def test_errors_are_classified():
     _, r = SetupApp(prober=Prober(down=True)).test_connection(FORM)
-    assert r["stage"] == "network" and "VPN" in r["error"]
+    assert r["stage"] == "network" and "Connection refused" in r["error"] and "прокси" in r["error"]
 
     class Rejecting(DemoBackend):
         def whoami(self):

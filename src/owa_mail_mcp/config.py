@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 KEYRING_SERVICE = "owa-mail-mcp"
-CONNECTION_FIELDS = ("backend", "server", "email", "username", "password", "auth_type", "trusted_certificates")
+CONNECTION_FIELDS = ("backend", "server", "email", "username", "password", "auth_type", "trusted_certificates", "legacy_tls", "proxy")
 
 
 def config_dir() -> Path:
@@ -57,6 +57,10 @@ class Settings:
     requests_per_minute: int = 120
     trusted_certificates: dict[str, str] = field(default_factory=dict)
     """`host:port` -> SHA-256 fingerprint of a server certificate the user chose to trust (pinning)."""
+    legacy_tls: tuple[str, ...] = ()
+    """`host:port` the user allowed to use old TLS settings that browsers accept and OpenSSL 3 refuses."""
+    proxy: str | None = None
+    """HTTPS proxy for Exchange, when the browser uses one the system settings do not show (a PAC script)."""
 
     @property
     def login(self) -> str | None:
@@ -81,8 +85,9 @@ class Settings:
                 raw = {}
             known = {f.name for f in fields(cls)} - {"password"}
             values = {k: v for k, v in raw.items() if k in known}
-            if "internal_domains" in values:
-                values["internal_domains"] = tuple(values["internal_domains"] or ())
+            for name in ("internal_domains", "legacy_tls"):
+                if name in values:
+                    values[name] = tuple(values[name] or ())
         values.update(_env_overrides())
         settings = cls(**values)
         if with_password and not settings.password and settings.backend == "ews":
@@ -100,7 +105,7 @@ def _env_overrides() -> dict[str, Any]:
     text = {
         "OWA_MAIL_BACKEND": "backend", "OWA_MAIL_SERVER": "server", "OWA_MAIL_EMAIL": "email",
         "OWA_MAIL_USERNAME": "username", "OWA_MAIL_PASSWORD": "password", "OWA_MAIL_AUTH": "auth_type",
-        "OWA_MAIL_UI_HOST": "ui_host",
+        "OWA_MAIL_UI_HOST": "ui_host", "OWA_MAIL_PROXY": "proxy",
     }
     for var, name in text.items():
         if env.get(var):
@@ -131,6 +136,7 @@ def save_settings(settings: Settings) -> Path:
     for transient in ("ui_host", "ui_port", "open_browser"):
         data.pop(transient, None)
     data["internal_domains"] = list(settings.internal_domains)
+    data["legacy_tls"] = list(settings.legacy_tls)
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".config-", suffix=".json")

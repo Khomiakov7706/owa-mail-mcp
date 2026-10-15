@@ -17,7 +17,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from .config import Settings
-from .tls import PinningAdapter, host_port
+from .tls import PinningAdapter, apply_transport_settings, host_port
 
 _EXCHANGE_HEADERS = ("X-OWA-Version", "X-FEServer", "X-BEServer", "X-CalculatedBETarget", "X-DiagInfo", "request-id", "X-Powered-By")
 _SOAP_GET_FOLDER = (
@@ -90,7 +90,7 @@ class Diagnosis:
 
 
 def _session(settings: Settings) -> requests.Session:
-    PinningAdapter.pins = dict(settings.trusted_certificates)
+    apply_transport_settings(settings)
     session = requests.Session()
     session.mount("https://", PinningAdapter())
     session.headers["User-Agent"] = "owa-mail-mcp diagnose"

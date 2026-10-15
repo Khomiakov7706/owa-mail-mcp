@@ -7,6 +7,7 @@ know), the AI access switches, ready-to-paste client configuration, and the call
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -19,7 +20,7 @@ from . import __version__
 from .backend import AuthenticationError, BackendError, SearchQuery
 from .config import KeyringUnavailable, Settings, config_path, get_password, save_settings, set_password
 from .runtime import read_journal
-from .tls import ServerUnreachable, format_fingerprint, host_port, pin_key, probe
+from .tls import LegacyTLSRequired, ServerUnreachable, apply_transport_settings, format_fingerprint, host_port, pin_key, probe
 from .web import LocalWebApp, load_page
 
 SERVER_NAME = "owa-mail"
@@ -94,6 +95,7 @@ class SetupApp:
         self.app.post("api/test", self.test_connection)
         self.app.post("api/trust", self.trust_certificate)
         self.app.post("api/forget-certificate", self.forget_certificate)
+        self.app.post("api/allow-legacy-tls", self.allow_legacy_tls)
         self.app.post("api/save-account", self.save_account)
         self.app.post("api/access", self.save_access)
         self.app.post("api/install", self.install)
@@ -123,7 +125,9 @@ class SetupApp:
                 "email": settings.email or "",
                 "username": settings.username if settings.username and settings.username != settings.email else "",
                 "auth_type": settings.auth_type,
+                "proxy": settings.proxy or "",
             },
+            "legacy_tls": list(settings.legacy_tls),
             "password_stored": stored,
             "access": {
                 "allow_send": settings.allow_send,
@@ -163,7 +167,10 @@ class SetupApp:
             return saved, "Почта должна выглядеть как name@company.com."
         if server.lower().startswith("http://"):
             return saved, "Нужен https: по http пароль не отправляется."
-        settings = replace(saved, backend="ews", server=server, email=email, username=username, auth_type=auth, password=None)
+        proxy = str(data.get("proxy") or "").strip() or None
+        if proxy and not re.match(r"^(https?://)?[\w.-]+:\d{1,5}/?$", proxy):
+            return saved, "Прокси указывается как host:port, например proxy.company.com:3128."
+        settings = replace(saved, backend="ews", server=server, email=email, username=username, auth_type=auth, password=None, proxy=proxy)
         password = str(data.get("password") or "")
         if not password:
             # An empty field means the stored password, but only for the login it was stored for.
@@ -180,15 +187,14 @@ class SetupApp:
         if not host:
             return 200, {"ok": False, "stage": "input", "error": "Не удалось разобрать адрес сервера."}
 
-        try:
-            cert = self._probe(host, port)
-        except ServerUnreachable as exc:
-            return 200, {
-                "ok": False, "stage": "network",
-                "error": f"Сервер {host}:{port} недоступен. Если почта открывается только из корпоративной сети, включите VPN.",
-                "detail": str(exc),
-            }
         key = pin_key(host, port)
+        apply_transport_settings(settings)
+        try:
+            cert = self._probe(host, port, legacy_ok=key in settings.legacy_tls)
+        except LegacyTLSRequired as exc:
+            return 200, {"ok": False, "stage": "legacy_tls", "host": host, "port": port, "reason": exc.reason}
+        except ServerUnreachable as exc:
+            return 200, {"ok": False, "stage": "network", "error": network_message(host, port, exc), "detail": exc.reason}
         pinned = settings.trusted_certificates.get(key)
         if pinned and pinned != cert.fingerprint:
             return 200, {"ok": False, "stage": "certificate", "certificate": cert.to_dict(), "previous_fingerprint": format_fingerprint(pinned)}
@@ -239,6 +245,17 @@ class SetupApp:
             settings = Settings.load(with_password=False)
             pins = {**settings.trusted_certificates, pin_key(host, port): cert.fingerprint}
             save_settings(replace(settings, trusted_certificates=pins))
+        return 200, {"ok": True}
+
+    def allow_legacy_tls(self, data: dict[str, Any]) -> tuple[int, Any]:
+        host, port = host_port(str(data.get("server") or ""))
+        if not host:
+            return 200, {"ok": False, "error": "Не удалось разобрать адрес сервера."}
+        key = pin_key(host, port)
+        with self._lock:
+            settings = Settings.load(with_password=False)
+            if key not in settings.legacy_tls:
+                save_settings(replace(settings, legacy_tls=(*settings.legacy_tls, key)))
         return 200, {"ok": True}
 
     def forget_certificate(self, data: dict[str, Any]) -> tuple[int, Any]:
@@ -305,6 +322,38 @@ def _ews_backend(settings: Settings):
     from .ews_backend import EWSBackend
 
     return EWSBackend(settings)
+
+
+def network_message(host: str, port: int, exc: ServerUnreachable) -> str:
+    if exc.kind == "dns":
+        return (f"Имя {host} не находится в DNS. Проверьте, что адрес совпадает с адресом веб-почты в браузере. "
+                "Если VPN включён, переподключите его: иногда система не сразу подхватывает DNS-серверы VPN.")
+    if exc.kind == "proxy":
+        return f"Прокси {exc.proxy} не пропустил соединение с {host}:{port}: {exc.reason}. Проверьте адрес прокси в разделе «Дополнительно»."
+    if exc.kind == "tls":
+        return f"Защищённое соединение с {host}:{port} не установилось: {exc.reason}."
+    hint = system_proxy_hint()
+    return (f"Не удаётся соединиться с {host}:{port} ({exc.reason}). Если браузер при этом открывает почту, он идёт "
+            "другим путём, чаще всего через прокси." + (" " + hint if hint else
+            " Посмотрите адрес прокси в настройках сети или спросите ИТ и укажите его в разделе «Дополнительно» → «Прокси»."))
+
+
+def system_proxy_hint() -> str:
+    """On macOS, says when the system uses a proxy auto-config script, which this program does not read."""
+    if sys.platform != "darwin":
+        return ""
+    try:
+        out = subprocess.run(["scutil", "--proxy"], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    pac = re.search(r"ProxyAutoConfigURLString\s*:\s*(\S+)", out)
+    if re.search(r"ProxyAutoConfigEnable\s*:\s*1", out):
+        where = f" ({pac.group(1)})" if pac else ""
+        return (f"В системе включена автоматическая настройка прокси (PAC){where}; её программа не читает. "
+                "Узнайте у ИТ адрес прокси для веб-почты (или найдите его в PAC-файле) и укажите в «Дополнительно» → «Прокси».")
+    if re.search(r"ProxyAutoDiscoveryEnable\s*:\s*1", out):
+        return "В системе включено автообнаружение прокси (WPAD); его программа не использует. Укажите прокси вручную в «Дополнительно» → «Прокси»."
+    return ""
 
 
 def _ews_diagnosis(settings: Settings):

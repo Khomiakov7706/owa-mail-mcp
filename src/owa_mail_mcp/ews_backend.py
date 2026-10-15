@@ -44,7 +44,7 @@ from .backend import AuthenticationError, BackendError, FolderScope, SearchQuery
 from .config import Settings
 from .models import Message, MessageSummary, Outgoing, Person
 from .text import html_to_text, normalize_whitespace, preview
-from .tls import PinningAdapter
+from .tls import PinningAdapter, apply_transport_settings
 
 # Every exchangelib session goes through the adapter that honours the certificates the user trusted.
 BaseProtocol.HTTP_ADAPTER_CLS = PinningAdapter
@@ -92,7 +92,7 @@ class EWSBackend:
         if auth is None:
             raise BackendError(f"Unknown OWA_MAIL_AUTH {settings.auth_type!r}; use one of {', '.join(_AUTH_TYPES)}.")
         self._settings = settings
-        PinningAdapter.pins = dict(settings.trusted_certificates)
+        apply_transport_settings(settings)
         # exchangelib caches protocols and keeps their connections open; a connection made under an
         # old pin (or old password) must not carry over to the new settings.
         close_connections()

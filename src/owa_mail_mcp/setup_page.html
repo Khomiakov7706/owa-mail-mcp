@@ -99,6 +99,9 @@ footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 2
         <option value="basic">Basic</option>
         <option value="kerberos">Kerberos</option>
       </select>
+      <label for="proxy">Прокси</label>
+      <input type="text" id="proxy" placeholder="proxy.company.com:3128" autocomplete="off" spellcheck="false">
+      <div class="hint">Нужен, только если браузер ходит к почте через прокси, который не виден в системных настройках (например, задан PAC-скриптом). Системный прокси подхватывается сам.</div>
     </details>
     <div class="actions">
       <button id="test">Проверить подключение</button>
@@ -172,7 +175,7 @@ async function api(path, body) {
 
 function account() {
   return { server: $("server").value.trim(), email: $("email").value.trim(), username: $("username").value.trim(),
-           password: $("password").value, auth_type: $("auth").value };
+           password: $("password").value, auth_type: $("auth").value, proxy: $("proxy").value.trim() };
 }
 const accountKey = () => JSON.stringify(account());
 
@@ -181,6 +184,8 @@ function flash(id) { const n = $(id); n.classList.add("show"); setTimeout(() => 
 function fillForm(s) {
   $("server").value = s.account.server; $("email").value = s.account.email; $("username").value = s.account.username;
   $("auth").value = s.account.auth_type || "ntlm";
+  $("proxy").value = s.account.proxy || "";
+  if (s.account.proxy) document.querySelector("details").open = true;
   $("password").placeholder = s.password_stored ? "сохранён — оставьте пустым, чтобы не менять" : "";
   $("password-hint").textContent = s.password_stored ? "Пароль уже сохранён в связке ключей." : "";
   $("allow-send").checked = s.access.allow_send; $("domains").value = s.access.internal_domains; $("timeout").value = s.access.confirm_timeout;
@@ -281,6 +286,18 @@ async function runTest() {
       r.latest.length ? el("ul", {}, r.latest.map(m => el("li", {}, `${m.from}: ${m.subject}`))) : null));
   } else if (r.stage === "certificate") {
     showResult(certCard(r, form));
+  } else if (r.stage === "legacy_tls") {
+    showResult(el("div", { class: "cert" },
+      el("h3", {}, "Сервер использует устаревшие настройки защищённого соединения"),
+      el("div", {}, `${r.host}:${r.port} соединяется только с настройками TLS, которые браузеры ещё принимают, а современный OpenSSL по умолчанию отклоняет (${r.reason}). ` +
+        "Обычно так настроены старые Exchange или шлюзы перед ними. Можно разрешить их только для этого сервера: сертификат по-прежнему будет проверяться."),
+      el("div", { class: "actions" },
+        el("button", { class: "primary", onclick: async (ev) => {
+          ev.target.disabled = true;
+          const t = await api("api/allow-legacy-tls", { server: form.server });
+          if (t.ok) runTest(); else { ev.target.disabled = false; showResult(el("div", { class: "result err" }, t.error)); }
+        } }, "Разрешить для этого сервера"),
+        el("button", { onclick: () => showResult(el("div", { class: "result info" }, "Не разрешено, подключение не выполнено.")) }, "Отмена"))));
   } else {
     const d = r.diagnosis;
     const report = d ? [d.summary, "", ...d.details.map(x => "- " + x)].join("\n") : "";
@@ -290,7 +307,7 @@ async function runTest() {
     showResult(el("div", { class: "result err" },
       d ? el("div", { style: "font-weight:600" }, d.summary) : (r.error || "Ошибка"),
       d ? el("div", { class: "hint" }, "Сообщение библиотеки: " + r.error) : null,
-      r.detail ? el("div", { class: "hint" }, r.detail) : null,
+      r.detail ? el("div", { class: "hint" }, "Ответ системы: " + r.detail) : null,
       d && d.details.length ? el("details", {}, el("summary", {}, "Что ответил сервер"),
         el("pre", { class: "code mono", style: "color:var(--text)" }, d.details.join("\n\n"))) : null,
       copyBtn ? el("div", { class: "actions", style: "margin-top:8px" }, copyBtn) : null));
@@ -321,7 +338,7 @@ async function refresh(fill) {
 
 $("test").addEventListener("click", runTest);
 $("save").addEventListener("click", saveAccount);
-for (const id of ["server", "email", "username", "password", "auth"]) $(id).addEventListener("input", () => { $("save").disabled = accountKey() !== testedKey; });
+for (const id of ["server", "email", "username", "password", "auth", "proxy"]) $(id).addEventListener("input", () => { $("save").disabled = accountKey() !== testedKey; });
 $("allow-send").addEventListener("change", saveAccessSoon);
 $("domains").addEventListener("input", saveAccessSoon);
 $("timeout").addEventListener("input", saveAccessSoon);
