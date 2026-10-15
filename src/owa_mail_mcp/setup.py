@@ -1,8 +1,7 @@
 """The setup window: connect the mailbox, choose what the assistant may do, and hook up MCP clients.
 
-Mirrors the reference app's Settings: an account form with "Test connection" (and a trust prompt
-for a certificate the system does not know), the AI access switches, ready-to-paste client
-configuration, and the call journal.
+An account form with "Test connection" (and a trust prompt for a certificate the system does not
+know), the AI access switches, ready-to-paste client configuration, and the call journal.
 """
 
 from __future__ import annotations

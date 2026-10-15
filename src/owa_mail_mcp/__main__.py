@@ -32,7 +32,7 @@ def make_backend(settings: Settings) -> MailBackend:
 
 class _SetupLauncher:
     """Opens the setup window from inside the MCP server when the assistant finds the mailbox not
-    connected, the way the reference app's bridge brings up the app. At most once every 2 minutes."""
+    connected. At most once every 2 minutes."""
 
     def __init__(self) -> None:
         self._app = None

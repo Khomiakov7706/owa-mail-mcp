@@ -436,7 +436,7 @@ def build_server(
             "scan_limit_reached": len(headers) >= scan_limit,
         }
 
-    if True:  # always listed, like create_meeting in the reference app; refused while sending is off
+    if True:  # always listed, so the assistant can tell the user how to enable it; refused while sending is off
         @mcp.tool(
             title="Send email",
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),

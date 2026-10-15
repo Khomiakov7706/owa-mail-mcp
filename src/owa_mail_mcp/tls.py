@@ -1,6 +1,6 @@
 """Server certificates: look at one before trusting it, and pin the one the user trusted.
 
-Like the reference app: a corporate Exchange often has a certificate from the company's own CA,
+A corporate Exchange often has a certificate from the company's own CA,
 which the system does not trust. Instead of turning verification off, the user sees the
 certificate (who issued it, until when, its SHA-256 fingerprint) and trusts exactly that one.
 A changed certificate is shown with the old and new fingerprints, so a renewal can be told
