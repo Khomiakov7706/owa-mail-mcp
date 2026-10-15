@@ -1,6 +1,6 @@
 # OWA Mail MCP — рабочая почта Exchange для AI-агента
 
-MCP-сервер для Microsoft Exchange / OWA. AI-агент (Claude Code, Claude Desktop, Codex, Cursor или любой MCP-клиент) проверяет входящие, ищет письма, пересказывает переписку и вложения, находит людей в адресной книге. Письмо уходит, только когда пользователь нажмёт «Отправить» в окне подтверждения.
+MCP-сервер для Microsoft Exchange / OWA. AI-агент (Claude Code, Claude Desktop, Codex, Cursor, OpenCode, Kilo Code или любой MCP-клиент) проверяет входящие, ищет письма, пересказывает переписку и вложения, находит людей в адресной книге. Письмо уходит, только когда пользователь нажмёт «Отправить» в окне подтверждения.
 
 - Сайт: https://khomiakov7706.github.io/owa-mail-mcp/
 - Код: https://github.com/Khomiakov7706/owa-mail-mcp (MIT)
@@ -63,6 +63,52 @@ Claude Desktop (Settings → Developer → Edit Config) и Cursor (`~/.cursor/mc
 ```json
 { "mcpServers": { "owa-mail": { "command": "/Users/YOU/.local/bin/owa-mail-mcp" } } }
 ```
+
+OpenCode — файл `~/.config/opencode/opencode.json` (или `opencode.json` в корне проекта). Свой формат: ключ `mcp`, `"type": "local"`, команда — массивом; ключ `mcpServers` OpenCode не читает. Проверка: `opencode mcp list`.
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "owa-mail": {
+      "type": "local",
+      "command": ["/Users/YOU/.local/bin/owa-mail-mcp"],
+      "enabled": true
+    }
+  }
+}
+```
+
+Kilo Code, новые версии — тот же формат в `~/.config/kilo/kilo.jsonc` (для проекта `kilo.jsonc` или `.kilo/kilo.jsonc`):
+
+```json
+{
+  "mcp": {
+    "owa-mail": {
+      "type": "local",
+      "command": ["/Users/YOU/.local/bin/owa-mail-mcp"],
+      "enabled": true
+    }
+  }
+}
+```
+
+Kilo Code, старые версии — MCP Servers → «Edit Global MCP» (`mcp_settings.json`; для проекта `.kilocode/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "owa-mail": {
+      "command": "/Users/YOU/.local/bin/owa-mail-mcp",
+      "args": [],
+      "disabled": false,
+      "alwaysAllow": []
+    }
+  }
+}
+```
+
+Кнопка «Добавить» в окне настройки сама допишет OpenCode и Kilo Code в их файлы. Файл с комментариями (`.jsonc`) она не меняет, чтобы ничего не потерять, — тогда добавьте строки вручную.
 
 Любой stdio MCP-клиент: команда — абсолютный путь к `owa-mail-mcp`, без аргументов и переменных окружения.
 

@@ -113,7 +113,7 @@
       <a class="btn btn-ghost" href="#agents">Установить через агента</a>
       <a class="btn btn-ghost" href="https://github.com/Khomiakov7706/owa-mail-mcp">Исходный код на GitHub</a>
     </div>
-    <p class="works">Работает с <span>Claude Code</span><span>Claude Desktop</span><span>Codex</span><span>Cursor</span><span>любым MCP-клиентом</span></p>
+    <p class="works">Работает с <span>Claude Code</span><span>Claude Desktop</span><span>Codex</span><span>Cursor</span><span>OpenCode</span><span>Kilo Code</span><span>любым MCP-клиентом</span></p>
   </div>
 
   <div class="stage">
@@ -279,6 +279,8 @@ owa-mail-mcp setup</pre><button class="copy" type="button" data-copy="#c-win">К
         <button role="tab" id="t-cd" aria-controls="p-cd" aria-selected="false" tabindex="-1">Claude Desktop</button>
         <button role="tab" id="t-cx" aria-controls="p-cx" aria-selected="false" tabindex="-1">Codex</button>
         <button role="tab" id="t-cu" aria-controls="p-cu" aria-selected="false" tabindex="-1">Cursor</button>
+        <button role="tab" id="t-oc" aria-controls="p-oc" aria-selected="false" tabindex="-1">OpenCode</button>
+        <button role="tab" id="t-kc" aria-controls="p-kc" aria-selected="false" tabindex="-1">Kilo Code</button>
         <button role="tab" id="t-any" aria-controls="p-any" aria-selected="false" tabindex="-1">Другой клиент</button>
       </div>
       <div class="tabpanel" role="tabpanel" id="p-cc" aria-labelledby="t-cc">
@@ -304,6 +306,44 @@ owa-mail-mcp setup</pre><button class="copy" type="button" data-copy="#c-win">К
     "owa-mail": { "command": "/Users/YOU/.local/bin/owa-mail-mcp" }
   }
 }</pre><button class="copy" type="button" data-copy="#c-cu">Копировать</button></div>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-oc" aria-labelledby="t-oc">
+        <p>Файл <code>~/.config/opencode/opencode.json</code> (для одного проекта — <code>opencode.json</code> в его корне). У OpenCode свой формат: ключ <code>mcp</code>, <code>"type": "local"</code> и команда — массивом. Ключ <code>mcpServers</code> OpenCode не читает. Кнопка «Добавить» в окне настройки допишет это сама.</p>
+        <div class="code"><pre id="c-oc">{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "owa-mail": {
+      "type": "local",
+      "command": ["/Users/YOU/.local/bin/owa-mail-mcp"],
+      "enabled": true
+    }
+  }
+}</pre><button class="copy" type="button" data-copy="#c-oc">Копировать</button></div>
+        <p>Перезапустите OpenCode. Проверка: <code>opencode mcp list</code>.</p>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-kc" aria-labelledby="t-kc">
+        <p>Новые версии Kilo Code — тот же формат, что у OpenCode, в файле <code>~/.config/kilo/kilo.jsonc</code> (для проекта — <code>kilo.jsonc</code> или <code>.kilo/kilo.jsonc</code>):</p>
+        <div class="code"><pre id="c-kc">{
+  "mcp": {
+    "owa-mail": {
+      "type": "local",
+      "command": ["/Users/YOU/.local/bin/owa-mail-mcp"],
+      "enabled": true
+    }
+  }
+}</pre><button class="copy" type="button" data-copy="#c-kc">Копировать</button></div>
+        <p>Старые версии расширения: Kilo Code → MCP Servers → «Edit Global MCP» (файл <code>mcp_settings.json</code>; для проекта — <code>.kilocode/mcp.json</code>):</p>
+        <div class="code"><pre id="c-kl">{
+  "mcpServers": {
+    "owa-mail": {
+      "command": "/Users/YOU/.local/bin/owa-mail-mcp",
+      "args": [],
+      "disabled": false,
+      "alwaysAllow": []
+    }
+  }
+}</pre><button class="copy" type="button" data-copy="#c-kl">Копировать</button></div>
+        <p>После правки — перезапустите Kilo Code (в VS Code: Developer: Reload Window).</p>
       </div>
       <div class="tabpanel" role="tabpanel" id="p-any" aria-labelledby="t-any">
         <p>Любой MCP-клиент по stdio: команда — абсолютный путь к <code>owa-mail-mcp</code>, без аргументов и переменных окружения. Настройки сервер берёт из своего файла и связки ключей.</p>

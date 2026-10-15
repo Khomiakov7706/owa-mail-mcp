@@ -181,3 +181,41 @@ def test_status_tells_the_installer_whether_to_open_setup(isolated, capsys):
     assert status() == 0
     out = capsys.readouterr().out
     assert "password: saved" in out and "secret" not in out
+
+
+def test_opencode_and_kilo_snippets_use_their_own_format():
+    snippets = {s["id"]: json.loads(s["text"]) for s in setup_mod.snippets("/Users/ivan/.local/bin/owa-mail-mcp", []) if s["kind"] == "json"}
+    assert snippets["opencode"]["mcp"]["owa-mail"] == {"type": "local", "command": ["/Users/ivan/.local/bin/owa-mail-mcp"], "enabled": True}
+    assert snippets["opencode"]["$schema"] == "https://opencode.ai/config.json"
+    assert snippets["kilo"]["mcp"]["owa-mail"]["type"] == "local"
+    assert snippets["kilo-legacy"]["mcpServers"]["owa-mail"]["disabled"] is False
+
+
+def test_install_into_opencode_keeps_the_rest(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setattr(setup_mod, "server_command", lambda: ("/opt/bin/owa-mail-mcp", []))
+    path = tmp_path / "xdg" / "opencode" / "opencode.json"
+    _, r = SetupApp().install({"target": "opencode"})  # no file yet: created with $schema
+    assert r["ok"], r
+    assert json.loads(path.read_text()) == {
+        "$schema": "https://opencode.ai/config.json",
+        "mcp": {"owa-mail": {"type": "local", "command": ["/opt/bin/owa-mail-mcp"], "enabled": True}},
+    }
+    path.write_text(json.dumps({"model": "x/y", "mcp": {"other": {"type": "remote", "url": "https://e.x"}}}))
+    _, r = SetupApp().install({"target": "opencode"})
+    data = json.loads(path.read_text())
+    assert data["model"] == "x/y" and set(data["mcp"]) == {"other", "owa-mail"}
+
+
+def test_jsonc_with_comments_is_never_rewritten(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    path = tmp_path / "xdg" / "kilo" / "kilo.jsonc"
+    path.parent.mkdir(parents=True)
+    original = '{\n  // my settings\n  "mcp": {}\n}\n'
+    path.write_text(original)
+    _, r = SetupApp().install({"target": "kilo"})
+    assert not r["ok"] and "комментарии" in r["message"]
+    assert path.read_text() == original
+    path.write_text('{"mcp": {}}')
+    _, r = SetupApp().install({"target": "kilo"})
+    assert r["ok"] and json.loads(path.read_text())["mcp"]["owa-mail"]["type"] == "local"

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "owa-mail-mcp"
-version = "0.3.1"
+version = "0.3.2"
 description = "MCP server for Exchange / OWA mail: check, search, read threads, find senders, send only after the user confirms in a local window."
 readme = "README.md"
 license = "MIT"

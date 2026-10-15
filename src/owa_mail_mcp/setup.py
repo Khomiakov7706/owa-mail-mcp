@@ -56,7 +56,17 @@ def snippets(command: str, args: list[str]) -> list[dict[str, str]]:
         {"id": "claude-desktop", "title": "Claude Desktop", "kind": "json", "text": json.dumps({"mcpServers": {SERVER_NAME: entry}}, indent=2, ensure_ascii=False)},
         {"id": "cursor", "title": "Cursor", "kind": "json", "text": json.dumps({"mcpServers": {SERVER_NAME: entry}}, indent=2, ensure_ascii=False)},
         {"id": "vscode", "title": "VS Code", "kind": "json", "text": json.dumps({"servers": {SERVER_NAME: {"type": "stdio", **entry}}}, indent=2, ensure_ascii=False)},
+        {"id": "opencode", "title": "OpenCode", "kind": "json", "text": json.dumps(
+            {"$schema": "https://opencode.ai/config.json", "mcp": {SERVER_NAME: opencode_entry(command, args)}}, indent=2, ensure_ascii=False)},
+        {"id": "kilo", "title": "Kilo Code", "kind": "json", "text": json.dumps({"mcp": {SERVER_NAME: opencode_entry(command, args)}}, indent=2, ensure_ascii=False)},
+        {"id": "kilo-legacy", "title": "Kilo Code (старые версии, mcp_settings.json)", "kind": "json", "text": json.dumps(
+            {"mcpServers": {SERVER_NAME: {**entry, "args": list(args), "disabled": False, "alwaysAllow": []}}}, indent=2, ensure_ascii=False)},
     ]
+
+
+def opencode_entry(command: str, args: list[str]) -> dict[str, Any]:
+    """OpenCode (and Kilo Code, built on it): key `mcp`, a local server with the command as a list."""
+    return {"type": "local", "command": [command, *args], "enabled": True}
 
 
 def claude_desktop_config() -> Path:
@@ -71,6 +81,26 @@ def claude_desktop_config() -> Path:
 
 def cursor_config() -> Path:
     return Path.home() / ".cursor" / "mcp.json"
+
+
+def _xdg_config() -> Path:
+    import os
+
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+
+
+def opencode_config() -> Path:
+    """`~/.config/opencode/opencode.json` (a `.jsonc` next to it wins if that is what exists)."""
+    base = _xdg_config() / "opencode"
+    jsonc = base / "opencode.jsonc"
+    return jsonc if jsonc.exists() and not (base / "opencode.json").exists() else base / "opencode.json"
+
+
+def kilo_config() -> Path:
+    """`~/.config/kilo/kilo.jsonc` (or `kilo.json` if that is what exists)."""
+    base = _xdg_config() / "kilo"
+    plain = base / "kilo.json"
+    return plain if plain.exists() and not (base / "kilo.jsonc").exists() else base / "kilo.jsonc"
 
 
 class SetupApp:
@@ -149,6 +179,8 @@ class SetupApp:
             "codex": {"available": bool(shutil.which("codex")), "hint": "команда codex не найдена"},
             "claude-desktop": {"available": claude_desktop_config().parent.exists(), "hint": "Claude Desktop не установлен"},
             "cursor": {"available": cursor_config().parent.exists(), "hint": "Cursor не установлен"},
+            "opencode": {"available": bool(shutil.which("opencode")) or opencode_config().parent.exists(), "hint": "OpenCode не установлен"},
+            "kilo": {"available": bool(shutil.which("kilo")) or kilo_config().parent.exists(), "hint": "Kilo Code (новая версия) не найден"},
         }
 
     # --- account -----------------------------------------------------------------------------
@@ -303,11 +335,17 @@ class SetupApp:
             if target == "codex":
                 return 200, _run_cli(["codex", "mcp", "add", SERVER_NAME, "--", command, *args], "Codex")
             if target == "claude-desktop":
-                path = _merge_json(claude_desktop_config(), "mcpServers", command, args)
+                path = _merge_json(claude_desktop_config(), "mcpServers", _plain_entry(command, args))
                 return 200, {"ok": True, "message": f"Записано в {path}. Перезапустите Claude Desktop."}
             if target == "cursor":
-                path = _merge_json(cursor_config(), "mcpServers", command, args)
+                path = _merge_json(cursor_config(), "mcpServers", _plain_entry(command, args))
                 return 200, {"ok": True, "message": f"Записано в {path}. Cursor подхватит сервер сам или после перезапуска."}
+            if target == "opencode":
+                path = _merge_json(opencode_config(), "mcp", opencode_entry(command, args), schema="https://opencode.ai/config.json")
+                return 200, {"ok": True, "message": f"Записано в {path}. Перезапустите OpenCode; проверка: opencode mcp list."}
+            if target == "kilo":
+                path = _merge_json(kilo_config(), "mcp", opencode_entry(command, args))
+                return 200, {"ok": True, "message": f"Записано в {path}. Перезапустите Kilo Code (в VS Code: Reload Window)."}
         except (OSError, ValueError) as exc:
             return 200, {"ok": False, "message": str(exc)}
         return 400, {"ok": False, "message": "unknown target"}
@@ -379,18 +417,32 @@ def _run_cli(argv: list[str], title: str) -> dict[str, Any]:
     return {"ok": False, "message": f"{title}: {output[:500] or f'код выхода {proc.returncode}'}"}
 
 
-def _merge_json(path: Path, key: str, command: str, args: list[str]) -> Path:
+def _plain_entry(command: str, args: list[str]) -> dict[str, Any]:
+    entry: dict[str, Any] = {"command": command}
+    if args:
+        entry["args"] = args
+    return entry
+
+
+def _merge_json(path: Path, key: str, entry: dict[str, Any], schema: str | None = None) -> Path:
+    """Adds the server under `key`, keeping everything else. A file that is not plain JSON (a
+    .jsonc with comments, a broken one) is reported and never rewritten: comments would be lost."""
     data: dict[str, Any] = {}
     if path.exists():
         text = path.read_text(encoding="utf-8")
         if text.strip():
-            data = json.loads(text)  # a broken file is reported, never overwritten
+            try:
+                data = json.loads(text)
+            except ValueError as exc:
+                raise ValueError(
+                    f"{path} не удалось разобрать как JSON (возможно, в нём комментарии). "
+                    "Чтобы ничего не потерять, файл не изменён: добавьте строки из окна вручную."
+                ) from exc
             if not isinstance(data, dict):
                 raise ValueError(f"{path} is not a JSON object")
         shutil.copy2(path, path.with_suffix(path.suffix + ".bak"))
-    entry: dict[str, Any] = {"command": command}
-    if args:
-        entry["args"] = args
+    elif schema:
+        data["$schema"] = schema
     data.setdefault(key, {})[SERVER_NAME] = entry
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

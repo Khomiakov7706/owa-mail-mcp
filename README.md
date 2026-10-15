@@ -1,6 +1,6 @@
 # owa-mail-mcp
 
-MCP-сервер для почты Microsoft Exchange / OWA. Даёт AI-ассистенту (Claude Code, Claude Desktop, Codex, Cursor и любому stdio MCP-клиенту) доступ к почтовому ящику:
+MCP-сервер для почты Microsoft Exchange / OWA. Даёт AI-ассистенту (Claude Code, Claude Desktop, Codex, Cursor, OpenCode, Kilo Code и любому stdio MCP-клиенту) доступ к почтовому ящику:
 
 - **проверять почту:** новые и непрочитанные письма;
 - **искать сообщения:** по тексту, отправителю, получателю, теме, датам, вложениям;
@@ -44,7 +44,50 @@ pipx с Python 3.10+: `pipx install --python python3.12 git+https://github.com/K
 
 1. **Почтовый ящик Exchange.** Адрес веб-почты, почта, логин (`DOMAIN\login`, если вход Windows) и пароль, затем «Проверить подключение». При успехе видно ваше имя, число непрочитанных и последние письма. Если сервер недоступен, окно подскажет про VPN; если не подошёл пароль, так и скажет. Пароль сохраняется в системной связке ключей (Keychain, Credential Manager, Secret Service), а не в файле.
 2. **Что разрешено ассистенту.** По умолчанию только чтение. Переключатель «Разрешить отправку писем»; каждое письмо всё равно подтверждаете вы.
-3. **Подключение к ассистенту.** Кнопка «Добавить» для Claude Code, Codex, Claude Desktop и Cursor, плюс готовые строки с кнопкой «Скопировать» для них и для VS Code.
+3. **Подключение к ассистенту.** Кнопка «Добавить» для Claude Code, Codex, Claude Desktop, Cursor, OpenCode и Kilo Code, плюс готовые строки с кнопкой «Скопировать» для них и для VS Code.
+
+### Конфиги клиентов вручную
+
+В примерах замените `/Users/YOU` на свою домашнюю папку (точный путь показывает окно настройки).
+
+| Клиент | Как подключить |
+|---|---|
+| Claude Code | `claude mcp add --scope user owa-mail -- ~/.local/bin/owa-mail-mcp` |
+| Codex | `codex mcp add owa-mail -- ~/.local/bin/owa-mail-mcp` |
+| Claude Desktop, Cursor | `{"mcpServers": {"owa-mail": {"command": "/Users/YOU/.local/bin/owa-mail-mcp"}}}` в `claude_desktop_config.json` / `~/.cursor/mcp.json` |
+| OpenCode | `~/.config/opencode/opencode.json`, формат ниже |
+| Kilo Code (новые версии) | `~/.config/kilo/kilo.jsonc`, тот же формат, что у OpenCode |
+| Kilo Code (старые версии) | «Edit Global MCP» (`mcp_settings.json`) или `.kilocode/mcp.json`, формат `mcpServers` ниже |
+
+OpenCode и новый Kilo Code не читают ключ `mcpServers`: у них ключ `mcp`, `"type": "local"` и команда массивом.
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "owa-mail": {
+      "type": "local",
+      "command": ["/Users/YOU/.local/bin/owa-mail-mcp"],
+      "enabled": true
+    }
+  }
+}
+```
+
+Kilo Code, старые версии:
+
+```json
+{
+  "mcpServers": {
+    "owa-mail": {
+      "command": "/Users/YOU/.local/bin/owa-mail-mcp",
+      "args": [],
+      "disabled": false,
+      "alwaysAllow": []
+    }
+  }
+}
+```
 
 Ниже — журнал: какие инструменты и когда вызывал ассистент, без содержимого писем.
 
