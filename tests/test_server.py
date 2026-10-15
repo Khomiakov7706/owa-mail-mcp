@@ -88,11 +88,14 @@ async def test_bad_input_is_a_tool_error(make_server):
         assert r.is_error and "Cannot read the date" in r.content[0].text
 
 
-async def test_send_tool_absent_unless_enabled(backend):
+async def test_send_refused_unless_enabled(backend):
     mcp, _ = build_server(Settings(backend="demo", allow_send=False), backend)
     async with Client(mcp) as c:
         names = {t.name for t in (await c.list_tools()).tools}
-    assert "send_email" not in names and "check_mail" in names
+        r = await c.call_tool("send_email", {"to": ["anna.smirnova@example.com"], "subject": "Q4", "body": "Ок"})
+    assert "send_email" in names
+    assert r.is_error and "turned off" in r.content[0].text
+    assert backend.sent == []
 
 
 async def test_send_after_user_approves(make_server, backend):

@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Настройка OWA Mail MCP</title>
+<style nonce="{{NONCE}}">
+:root {
+  --bg: #f5f5f7; --card: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7;
+  --accent: #0a66d8; --accent-text: #ffffff; --danger: #c62828; --danger-bg: #fdecea;
+  --warn-bg: #fff4d6; --warn-text: #7a5300; --ok: #1b7f3b; --ok-bg: #e6f4ea; --code: #f0f1f4;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161618; --card: #232326; --text: #f2f2f4; --muted: #a1a1a6; --line: #3a3a3e;
+    --accent: #3b8cff; --accent-text: #ffffff; --danger: #ff6b6b; --danger-bg: #3a1f1f;
+    --warn-bg: #3a3218; --warn-text: #f5d27a; --ok: #5fd38a; --ok-bg: #1d3325; --code: #1b1b1e;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+header h1 { font-size: 19px; margin: 0; font-weight: 600; }
+.badge { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; }
+.badge.ok { background: var(--ok-bg); color: var(--ok); }
+.badge.no { background: var(--warn-bg); color: var(--warn-text); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+h2 { font-size: 16px; margin: 0 0 4px; }
+.lead { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+label { display: block; font-size: 13px; font-weight: 600; margin-top: 12px; }
+.hint { color: var(--muted); font-size: 12px; margin-top: 3px; }
+input[type=text], input[type=email], input[type=password], input[type=number], select {
+  width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 4px; }
+input[type=number] { width: 110px; }
+details { margin-top: 12px; } summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; align-items: center; }
+button { font: inherit; border-radius: 8px; padding: 8px 16px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+button.small { padding: 4px 10px; font-size: 13px; }
+button:disabled { opacity: .5; cursor: default; }
+.result { margin-top: 14px; border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.result.ok { background: var(--ok-bg); color: var(--ok); }
+.result.err { background: var(--danger-bg); color: var(--danger); }
+.result.info { background: var(--code); color: var(--muted); }
+.result ul { margin: 6px 0 0; padding-left: 18px; color: var(--text); }
+.cert { margin-top: 14px; border: 1px solid var(--warn-text); background: var(--warn-bg); color: var(--warn-text); border-radius: 10px; padding: 14px; }
+.cert h3 { margin: 0 0 8px; font-size: 15px; }
+.cert dl { display: grid; grid-template-columns: 120px 1fr; gap: 4px 10px; margin: 8px 0; font-size: 13px; color: var(--text); }
+.cert dt { color: var(--muted); }
+.cert dd { margin: 0; word-break: break-word; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+.switch { display: flex; gap: 12px; align-items: flex-start; margin-top: 6px; }
+.switch input { width: 18px; height: 18px; margin-top: 2px; flex: none; }
+.switch b { display: block; }
+.warn { background: var(--warn-bg); color: var(--warn-text); border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-top: 14px; }
+.client { border-top: 1px solid var(--line); padding: 12px 0; }
+.client:first-of-type { border-top: 0; padding-top: 4px; }
+.client .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.client .title { font-weight: 600; }
+pre.code { background: var(--code); border-radius: 8px; padding: 10px 12px; margin: 8px 0 0; white-space: pre-wrap; word-break: break-all; }
+.msg { font-size: 13px; margin-top: 6px; }
+.msg.ok { color: var(--ok); } .msg.err { color: var(--danger); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+td { padding: 5px 4px; border-top: 1px solid var(--line); vertical-align: top; }
+td.t { color: var(--muted); white-space: nowrap; width: 1%; }
+.e { color: var(--danger); } .k { color: var(--ok); }
+.saved { color: var(--ok); font-size: 13px; font-weight: 400; opacity: 0; transition: opacity .3s; }
+.saved.show { opacity: 1; }
+footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 24px; word-break: break-all; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>OWA Mail MCP — настройка</h1>
+    <span class="badge no" id="badge">Не настроено</span>
+  </header>
+
+  <section class="card">
+    <h2>1. Почтовый ящик Exchange</h2>
+    <p class="lead">Те же данные, с которыми вы входите в корпоративную веб-почту (OWA). Пароль хранится в системной связке ключей, а не в файле.</p>
+    <label for="server">Адрес сервера</label>
+    <input type="text" id="server" placeholder="mail.company.com" autocomplete="off" spellcheck="false">
+    <div class="hint">Адрес веб-почты: mail.company.com, https://owa.company.com или https://outlook.company.com/owa</div>
+    <label for="email">Почта</label>
+    <input type="email" id="email" placeholder="ivan.petrov@company.com" autocomplete="off" spellcheck="false">
+    <label for="username">Логин <span class="hint">(если отличается от почты)</span></label>
+    <input type="text" id="username" placeholder="COMPANY\ipetrov" autocomplete="off" spellcheck="false">
+    <div class="hint">Если в компании вход Windows (единый вход), укажите DOMAIN\login.</div>
+    <label for="password">Пароль</label>
+    <input type="password" id="password" autocomplete="off">
+    <div class="hint" id="password-hint"></div>
+    <details>
+      <summary>Дополнительно</summary>
+      <label for="auth">Способ входа</label>
+      <select id="auth">
+        <option value="ntlm">NTLM — вход Windows (по умолчанию)</option>
+        <option value="basic">Basic</option>
+        <option value="kerberos">Kerberos</option>
+      </select>
+    </details>
+    <div class="actions">
+      <button id="test">Проверить подключение</button>
+      <button class="primary" id="save" disabled>Сохранить</button>
+      <span class="saved" id="account-saved">Сохранено</span>
+    </div>
+    <div id="test-result"></div>
+    <div id="certs"></div>
+  </section>
+
+  <section class="card">
+    <h2>2. Что разрешено ассистенту <span class="saved" id="access-saved">Сохранено</span></h2>
+    <p class="lead">Ассистент читает почту: проверяет новые письма, ищет, читает переписку, ищет людей в адресной книге.</p>
+    <div class="switch">
+      <input type="checkbox" id="allow-send">
+      <label for="allow-send" style="margin:0;font-weight:400"><b>Разрешить отправку писем</b>
+        <span class="hint">Каждое письмо открывается в отдельном окне в браузере: вы видите получателей (внешние выделены), тему и текст и сами нажимаете «Отправить», «Изменить» или «Не отправлять». Без вашего нажатия ничего не уходит.</span></label>
+    </div>
+    <label for="domains">Свои домены <span class="hint">(не отмечать как внешние)</span></label>
+    <input type="text" id="domains" placeholder="company.ru, company.com" spellcheck="false">
+    <div class="hint">Домен вашей почты учитывается сам; здесь — дополнительные домены компании.</div>
+    <label for="timeout">Сколько ждать подтверждения, секунд</label>
+    <input type="number" id="timeout" min="15" max="600" step="5">
+    <div class="hint">Большинство клиентов прерывают вызов через 60 секунд, поэтому по умолчанию 50.</div>
+    <div class="warn">Темы, тексты и адреса писем, которые прочитает ассистент, уходят в AI-сервис, которым вы пользуетесь. Убедитесь, что политика компании это разрешает.</div>
+  </section>
+
+  <section class="card">
+    <h2>3. Подключение к ассистенту</h2>
+    <p class="lead">Нажмите «Добавить» или скопируйте строку в настройки своего MCP-клиента. Любой stdio-клиент подключается так же: команда — путь к owa-mail-mcp, без аргументов.</p>
+    <div id="clients"></div>
+    <div class="hint" style="margin-top:10px">Учётные данные и разрешения подхватываются без перезапуска клиента.</div>
+  </section>
+
+  <section class="card">
+    <h2>Журнал вызовов</h2>
+    <p class="lead">Какие инструменты вызывал ассистент. Хранятся только названия и время, без содержимого писем.</p>
+    <div id="journal"></div>
+  </section>
+
+  <div class="actions" style="justify-content:center" id="done-row" hidden>
+    <button class="primary" id="done">Готово</button>
+  </div>
+  <footer id="footer"></footer>
+</main>
+<script nonce="{{NONCE}}">
+"use strict";
+const base = location.pathname.endsWith("/") ? location.pathname : location.pathname + "/";
+const $ = (id) => document.getElementById(id);
+let state = null;
+let testedKey = null;
+
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") node.className = v;
+    else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null && v !== false) node.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat()) if (c !== null && c !== undefined && c !== false) node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return node;
+}
+
+async function api(path, body) {
+  const res = await fetch(base + path, body === undefined ? { cache: "no-store" } :
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok && !("ok" in data)) throw new Error(data.error || ("HTTP " + res.status));
+  return data;
+}
+
+function account() {
+  return { server: $("server").value.trim(), email: $("email").value.trim(), username: $("username").value.trim(),
+           password: $("password").value, auth_type: $("auth").value };
+}
+const accountKey = () => JSON.stringify(account());
+
+function flash(id) { const n = $(id); n.classList.add("show"); setTimeout(() => n.classList.remove("show"), 1600); }
+
+function fillForm(s) {
+  $("server").value = s.account.server; $("email").value = s.account.email; $("username").value = s.account.username;
+  $("auth").value = s.account.auth_type || "ntlm";
+  $("password").placeholder = s.password_stored ? "сохранён — оставьте пустым, чтобы не менять" : "";
+  $("password-hint").textContent = s.password_stored ? "Пароль уже сохранён в связке ключей." : "";
+  $("allow-send").checked = s.access.allow_send; $("domains").value = s.access.internal_domains; $("timeout").value = s.access.confirm_timeout;
+}
+
+function render(s) {
+  state = s;
+  const badge = $("badge");
+  badge.textContent = s.configured ? "Почта подключена" : "Не настроено";
+  badge.className = "badge " + (s.configured ? "ok" : "no");
+  $("footer").textContent = `owa-mail-mcp ${s.version} · настройки: ${s.config_path}`;
+  $("done-row").hidden = !s.standalone;
+  renderCerts(s.trusted_certificates);
+  renderClients(s);
+  renderJournal(s.journal);
+}
+
+function renderCerts(list) {
+  $("certs").replaceChildren(...(list.length ? [el("div", { class: "hint", style: "margin-top:14px" }, "Доверенные сертификаты:"),
+    ...list.map(c => el("div", { class: "row", style: "display:flex;gap:8px;align-items:center;margin-top:4px" },
+      el("span", { class: "mono" }, `${c.key}  ${c.fingerprint.slice(0, 23)}…`),
+      el("button", { class: "small", onclick: async () => { await api("api/forget-certificate", { key: c.key }); refresh(); } }, "Забыть")))] : []));
+}
+
+function renderClients(s) {
+  const box = $("clients");
+  box.replaceChildren(...s.snippets.map(sn => {
+    const inst = s.installers[sn.id];
+    const msg = el("div", { class: "msg" });
+    const copy = el("button", { class: "small", onclick: async () => {
+      try { await navigator.clipboard.writeText(sn.text); copy.textContent = "Скопировано"; }
+      catch { copy.textContent = "Не удалось"; }
+      setTimeout(() => copy.textContent = "Скопировать", 1500);
+    } }, "Скопировать");
+    const add = inst ? el("button", { class: "small primary", disabled: !inst.available, title: inst.available ? "" : inst.hint,
+      onclick: async () => {
+        add.disabled = true; msg.className = "msg"; msg.textContent = "Добавляю…";
+        try { const r = await api("api/install", { target: sn.id }); msg.className = "msg " + (r.ok ? "ok" : "err"); msg.textContent = r.message; }
+        catch (e) { msg.className = "msg err"; msg.textContent = String(e); }
+        add.disabled = false;
+      } }, "Добавить") : null;
+    return el("div", { class: "client" },
+      el("div", { class: "row" }, el("span", { class: "title" }, sn.title), el("span", {}, add, " ", copy)),
+      el("pre", { class: "code mono" }, sn.text),
+      inst && !inst.available ? el("div", { class: "hint" }, inst.hint + " — скопируйте строку вручную.") : null,
+      msg);
+  }));
+}
+
+function renderJournal(items) {
+  if (!items.length) { $("journal").replaceChildren(el("div", { class: "hint" }, "Пока пусто: ассистент ещё не обращался к почте.")); return; }
+  $("journal").replaceChildren(el("table", {}, items.slice(0, 15).map(e => el("tr", {},
+    el("td", { class: "t" }, new Date(e.time * 1000).toLocaleString()),
+    el("td", { class: e.error ? "e" : "k" }, e.error ? "✗" : "✓"),
+    el("td", { class: "mono" }, e.tool),
+    el("td", { class: "t" }, e.client || "")))));
+}
+
+function showResult(node) { $("test-result").replaceChildren(...(node ? [node] : [])); }
+
+function certCard(r, form) {
+  const c = r.certificate;
+  const changed = !!r.previous_fingerprint;
+  return el("div", { class: "cert" },
+    el("h3", {}, changed ? "Сертификат сервера изменился" : "Система не доверяет сертификату сервера"),
+    el("div", {}, changed
+      ? "Раньше вы доверяли другому сертификату этого сервера. Это может быть плановая замена, а может быть перехват. Сверьте новый отпечаток с ИТ-отделом."
+      : `Так бывает, если сертификат выпущен внутренним центром сертификации компании (${c.system_error || "не проверен"}). Доверяйте ему, только если уверены, что это ваш сервер.`),
+    el("dl", {},
+      el("dt", {}, "Сервер"), el("dd", {}, `${c.host}:${c.port}`),
+      el("dt", {}, "Выдан для"), el("dd", {}, c.subject || "—"),
+      el("dt", {}, "Кем выдан"), el("dd", {}, c.issuer || "—"),
+      el("dt", {}, "Действует до"), el("dd", {}, c.not_after || "—"),
+      c.names.length ? [el("dt", {}, "Имена"), el("dd", {}, c.names.join(", "))] : null,
+      changed ? [el("dt", {}, "Был SHA-256"), el("dd", { class: "mono" }, r.previous_fingerprint)] : null,
+      el("dt", {}, changed ? "Стал SHA-256" : "SHA-256"), el("dd", { class: "mono" }, c.fingerprint_display)),
+    el("div", { class: "actions" },
+      el("button", { class: "primary", onclick: async (ev) => {
+        ev.target.disabled = true;
+        const t = await api("api/trust", { server: form.server, fingerprint: c.fingerprint });
+        if (t.ok) { await refresh(); runTest(); } else { ev.target.disabled = false; showResult(el("div", { class: "result err" }, t.error)); }
+      } }, "Доверять этому сертификату"),
+      el("button", { onclick: () => showResult(el("div", { class: "result info" }, "Сертификат не принят, подключение не выполнено.")) }, "Не доверять")));
+}
+
+async function runTest() {
+  const form = account();
+  $("test").disabled = true; $("save").disabled = true;
+  showResult(el("div", { class: "result info" }, "Проверяю подключение… Это может занять до минуты."));
+  let r;
+  try { r = await api("api/test", form); } catch (e) { r = { ok: false, error: String(e) }; }
+  $("test").disabled = false;
+  if (r.ok) {
+    testedKey = JSON.stringify(form);
+    $("save").disabled = false;
+    showResult(el("div", { class: "result ok" },
+      `Подключено: ${r.me.name ? r.me.name + " " : ""}<${r.me.email}>. Непрочитанных во «Входящих»: ${r.unread ?? "?"}.`,
+      r.latest.length ? el("ul", {}, r.latest.map(m => el("li", {}, `${m.from}: ${m.subject}`))) : null));
+  } else if (r.stage === "certificate") {
+    showResult(certCard(r, form));
+  } else {
+    showResult(el("div", { class: "result err" }, r.error || "Ошибка", r.detail ? el("div", { class: "hint" }, r.detail) : null));
+  }
+}
+
+async function saveAccount() {
+  $("save").disabled = true;
+  const r = await api("api/save-account", account());
+  if (r.ok) { $("password").value = ""; testedKey = null; flash("account-saved"); await refresh(); }
+  else { showResult(el("div", { class: "result err" }, r.error)); $("save").disabled = false; }
+}
+
+let accessTimer = null;
+function saveAccessSoon() {
+  clearTimeout(accessTimer);
+  accessTimer = setTimeout(async () => {
+    const r = await api("api/access", { allow_send: $("allow-send").checked, internal_domains: $("domains").value, confirm_timeout: Number($("timeout").value) });
+    if (r.ok) flash("access-saved");
+  }, 400);
+}
+
+async function refresh(fill) {
+  const s = await api("api/state");
+  if (fill) fillForm(s);
+  render(s);
+}
+
+$("test").addEventListener("click", runTest);
+$("save").addEventListener("click", saveAccount);
+for (const id of ["server", "email", "username", "password", "auth"]) $(id).addEventListener("input", () => { $("save").disabled = accountKey() !== testedKey; });
+$("allow-send").addEventListener("change", saveAccessSoon);
+$("domains").addEventListener("input", saveAccessSoon);
+$("timeout").addEventListener("input", saveAccessSoon);
+$("done").addEventListener("click", async () => { await api("api/done", {}); document.body.replaceChildren(el("main", {}, el("div", { class: "card" }, el("h2", {}, "Готово"), el("p", { class: "lead" }, "Вкладку можно закрыть. Чтобы изменить настройки, запустите owa-mail-mcp setup.")))); });
+refresh(true);
+setInterval(async () => { try { renderJournal((await api("api/journal")).journal); } catch {} }, 5000);
+</script>
+</body>
+</html>

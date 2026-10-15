@@ -36,12 +36,17 @@ from exchangelib.errors import (
 )
 from exchangelib.items import Message as _EwsMessageType
 from exchangelib.properties import ItemId
+from exchangelib.protocol import BaseProtocol
 from exchangelib.transport import BASIC, DIGEST, GSSAPI, NTLM, SSPI
 
 from .backend import AuthenticationError, BackendError, FolderScope, SearchQuery, SearchResult
 from .config import Settings
 from .models import Message, MessageSummary, Outgoing, Person
 from .text import html_to_text, normalize_whitespace, preview
+from .tls import PinningAdapter
+
+# Every exchangelib session goes through the adapter that honours the certificates the user trusted.
+BaseProtocol.HTTP_ADAPTER_CLS = PinningAdapter
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +74,10 @@ def ews_endpoint(server: str) -> str:
     return f"https://{parsed.netloc}/EWS/Exchange.asmx"
 
 
+class CertificateProblem(BackendError):
+    """The server's certificate is not trusted by the system or no longer matches the trusted one."""
+
+
 class EWSBackend:
     name = "ews"
 
@@ -76,13 +85,13 @@ class EWSBackend:
         missing = [n for n, v in (("OWA_MAIL_SERVER", settings.server), ("OWA_MAIL_EMAIL", settings.email), ("password", settings.password)) if not v]
         if missing:
             raise BackendError(
-                "Not configured: " + ", ".join(missing) + ". Set the environment variables (see README); "
-                "store the password with `owa-mail-mcp set-password` or OWA_MAIL_PASSWORD."
+                "OWA Mail MCP is not connected to a mailbox yet (missing: " + ", ".join(missing) + ")."
             )
         auth = _AUTH_TYPES.get(settings.auth_type)
         if auth is None:
             raise BackendError(f"Unknown OWA_MAIL_AUTH {settings.auth_type!r}; use one of {', '.join(_AUTH_TYPES)}.")
         self._settings = settings
+        PinningAdapter.pins = dict(settings.trusted_certificates)
         self._auth = auth
         self._endpoint = ews_endpoint(settings.server or "")
         self._account: Account | None = None
@@ -113,12 +122,18 @@ class EWSBackend:
             return fn()
         except UnauthorizedError as exc:
             raise AuthenticationError(
-                "Exchange rejected the credentials. Calls to Exchange are paused until the server is restarted, "
-                "so a wrong password cannot lock the account. Ask the user to check the password."
+                "Exchange rejected the credentials. Calls to Exchange are paused so a wrong password cannot lock "
+                "the account. Ask the user to re-enter the password in OWA Mail MCP setup (`owa-mail-mcp setup`)."
             ) from exc
         except ErrorAccessDenied as exc:
             raise BackendError("Exchange denied access to this item or mailbox.") from exc
         except TransportError as exc:
+            text = str(exc)
+            if "CERTIFICATE_VERIFY_FAILED" in text or "Fingerprints did not match" in text or "certificate verify failed" in text:
+                raise CertificateProblem(
+                    "The Exchange server's certificate is not trusted (or changed since the user trusted it). "
+                    "Ask the user to run `owa-mail-mcp setup` and check the certificate."
+                ) from exc
             raise BackendError(f"Cannot reach Exchange ({type(exc).__name__}). Is the VPN on?") from exc
         except (ConnectionError, TimeoutError) as exc:
             raise BackendError(f"Cannot reach Exchange ({type(exc).__name__}). Is the VPN on?") from exc
