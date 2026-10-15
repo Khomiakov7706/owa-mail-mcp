@@ -45,7 +45,15 @@ FOLDERS = {
     "root": ("root-id", "Top of Information Store", "IPF.Note", 0, 0),
     "msgfolderroot": ("msgroot-id", "Top of Information Store", "IPF.Note", 0, 0),
     "inbox": ("inbox-id", "Входящие", "IPF.Note", 3, 2),
+    "sentitems": ("sent-id", "Отправленные", "IPF.Note", 1, 0),
+    "deleteditems": ("trash-id", "Удалённые", "IPF.Note", 0, 0),
+    "junkemail": ("junk-id", "Нежелательная почта", "IPF.Note", 0, 0),
+    "drafts": ("drafts-id", "Черновики", "IPF.Note", 0, 0),
+    "outbox": ("outbox-id", "Исходящие", "IPF.Note", 0, 0),
 }
+SENT = [
+    ("msg-s1", "RE: Бюджет Q4", "Иван Петров", "ivan@corp.test", "2026-10-14T10:00:00Z", "true", "Анна, по подрядчикам согласен."),
+]
 MESSAGES = [
     ("msg-1", "RE: Бюджет Q4", "Анна Смирнова", "anna@corp.test", "2026-10-15T08:00:00Z", "false", "Ок, ставлю встречу на четверг."),
     ("msg-2", "Отпуск в ноябре", "Мария Иванова", "maria@corp.test", "2026-10-14T16:30:00Z", "false", "Подтвердите, пожалуйста, отпуск."),
@@ -80,26 +88,70 @@ def get_folder_response(body):
 def _message_xml(m, full):
     mid, subject, name, email, received, is_read, body = m
     extra = f'<t:Body BodyType="Text">{body}</t:Body>' if full else ""
+    if full and mid == "msg-1":
+        extra += ('<t:Attachments><t:FileAttachment><t:AttachmentId Id="att-1"/><t:Name>transcript.docx</t:Name>'
+                  "<t:Size>2048</t:Size></t:FileAttachment></t:Attachments>")
+    conversation = '<t:ConversationId Id="conv-budget"/>' if "Бюджет" in subject else f'<t:ConversationId Id="conv-{mid}"/>'
     return (
         f'<t:Message><t:ItemId Id="{mid}" ChangeKey="ck"/><t:Subject>{subject}</t:Subject>{extra}'
         f"<t:DateTimeReceived>{received}</t:DateTimeReceived><t:HasAttachments>false</t:HasAttachments>"
         f"<t:Importance>Normal</t:Importance>"
         f"<t:Sender><t:Mailbox><t:Name>{name}</t:Name><t:EmailAddress>{email}</t:EmailAddress></t:Mailbox></t:Sender>"
-        f"<t:IsRead>{is_read}</t:IsRead></t:Message>"
+        f"<t:IsRead>{is_read}</t:IsRead>{conversation}</t:Message>"
     )
 
 
-def find_item_response():
-    items = "".join(_message_xml(m, False) for m in MESSAGES)
+def transcript_docx() -> bytes:
+    import io
+    import zipfile
+
+    doc = (
+        '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        "<w:body><w:p><w:r><w:t>Протокол встречи PBR</w:t></w:r></w:p>"
+        "<w:p><w:r><w:t>Анна:</w:t></w:r><w:r><w:tab/><w:t>бюджет согласован.</w:t></w:r></w:p></w:body></w:document>"
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("word/document.xml", doc)
+    return buf.getvalue()
+
+
+def get_attachment_response():
+    content = base64.b64encode(transcript_docx()).decode()
+    return (
+        '<m:GetAttachmentResponse><m:ResponseMessages><m:GetAttachmentResponseMessage ResponseClass="Success">'
+        "<m:ResponseCode>NoError</m:ResponseCode><m:Attachments><t:FileAttachment>"
+        '<t:AttachmentId Id="att-1"/><t:Name>transcript.docx</t:Name>'
+        "<t:ContentType>application/vnd.openxmlformats-officedocument.wordprocessingml.document</t:ContentType>"
+        f"<t:Content>{content}</t:Content></t:FileAttachment></m:Attachments>"
+        "</m:GetAttachmentResponseMessage></m:ResponseMessages></m:GetAttachmentResponse>"
+    )
+
+
+def find_item_response(body=""):
+    parents = re.search(r"<m:ParentFolderIds>(.*?)</m:ParentFolderIds>", body, re.S)
+    ids = re.findall(r'(?:Distinguished)?FolderId Id="([^"]+)"', parents.group(1)) if parents else []
+    if len(ids) > 1:  # what the bank's Exchange says to a multi-folder search
+        return (
+            '<m:FindItemResponse><m:ResponseMessages><m:FindItemResponseMessage ResponseClass="Error">'
+            "<m:MessageText>Shared folder search cannot be performed on multiple folders.</m:MessageText>"
+            "<m:ResponseCode>ErrorInvalidOperation</m:ResponseCode><m:DescriptiveLinkKey>0</m:DescriptiveLinkKey>"
+            "</m:FindItemResponseMessage></m:ResponseMessages></m:FindItemResponse>"
+        )
+    pool = SENT if ids and ids[0] in ("sent-id", "sentitems") else MESSAGES if ids and ids[0] in ("inbox-id", "inbox") else []
+    if "item:ConversationId" in body:
+        conv = re.search(r'Constant Value="([^"]+)"', body)
+        pool = [m for m in pool if conv and ("Бюджет" in m[1]) == (conv.group(1) == "conv-budget")]
+    items = "".join(_message_xml(m, False) for m in pool)
     return (
         '<m:FindItemResponse><m:ResponseMessages><m:FindItemResponseMessage ResponseClass="Success">'
-        f'<m:ResponseCode>NoError</m:ResponseCode><m:RootFolder TotalItemsInView="{len(MESSAGES)}" IncludesLastItemInRange="true">'
+        f'<m:ResponseCode>NoError</m:ResponseCode><m:RootFolder TotalItemsInView="{len(pool)}" IncludesLastItemInRange="true">'
         f"<t:Items>{items}</t:Items></m:RootFolder></m:FindItemResponseMessage></m:ResponseMessages></m:FindItemResponse>"
     )
 
 
 def get_item_response(ids):
-    by_id = {m[0]: m for m in MESSAGES}
+    by_id = {m[0]: m for m in MESSAGES + SENT}
     messages = "".join(
         '<m:GetItemResponseMessage ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode>'
         f"<m:Items>{_message_xml(by_id[i], True)}</m:Items></m:GetItemResponseMessage>"
@@ -134,7 +186,9 @@ class FakeExchange(BaseHTTPRequestHandler):
                 "<t:Folders/></m:RootFolder></m:FindFolderResponseMessage></m:ResponseMessages></m:FindFolderResponse>"
             )
         elif "FindItem" in body:
-            answer = find_item_response()
+            answer = find_item_response(body)
+        elif "GetAttachment" in body:
+            answer = get_attachment_response()
         elif "GetItem" in body:
             answer = get_item_response(re.findall(r'ItemId Id="([^"]+)"', body))
         else:  # any other operation: a SOAP error with version headers, as Exchange does
@@ -298,3 +352,67 @@ def test_setup_window_test_connection_against_exchange(exchange, tmp_path, monke
     json.dumps(result)  # what failed before: a folder object instead of a number
     assert result["ok"], result
     assert result["unread"] == 2 and len(result["latest"]) == 3
+
+
+def test_reading_a_message_with_an_attachment(exchange):
+    port, fingerprint = exchange
+    msg = EWSBackend(_settings(port, fingerprint)).get_message("msg-1")
+    assert msg.subject == "RE: Бюджет Q4" and msg.body.startswith("Ок, ставлю встречу")
+    assert msg.attachments == ["transcript.docx"]
+
+
+def test_thread_and_all_folder_search_go_folder_by_folder(exchange):
+    from owa_mail_mcp.backend import SearchQuery
+
+    port, fingerprint = exchange
+    backend = EWSBackend(_settings(port, fingerprint))
+    thread = backend.get_thread("msg-1", 30)
+    assert [m.id for m in thread] == ["msg-s1", "msg-1"]  # Sent and Inbox, oldest first
+    everywhere = backend.search(SearchQuery(folder="all", limit=10)).messages
+    assert {m.id for m in everywhere} == {"msg-1", "msg-2", "msg-3", "msg-s1"}
+    assert everywhere[0].id == "msg-1"  # newest first across folders
+    both = backend.search(SearchQuery(folder="inbox_and_sent", limit=2)).messages
+    assert [m.id for m in both] == ["msg-1", "msg-2"]
+    sent = backend.scan_headers("sent", None, None, 50)
+    assert [m.id for m in sent] == ["msg-s1"]
+
+
+@pytest.mark.anyio
+async def test_mcp_tools_read_messages_and_threads(exchange):
+    from mcp import Client
+
+    from owa_mail_mcp.server import build_server
+
+    port, fingerprint = exchange
+    mcp, _ = build_server(_settings(port, fingerprint), EWSBackend(_settings(port, fingerprint)))
+    async with Client(mcp) as c:
+        r = await c.call_tool("get_message", {"message_id": "msg-1"})
+        assert not r.is_error, r.content
+        assert r.structured_content["attachments"] == ["transcript.docx"]
+        r = await c.call_tool("get_thread", {"message_id": "msg-1"})
+        assert not r.is_error, r.content
+        assert r.structured_content["message_count"] == 2
+        r = await c.call_tool("search_messages", {"text": "бюджет", "folder": "all"})
+        assert not r.is_error, r.content
+        r = await c.call_tool("get_attachment", {"message_id": "msg-1", "attachment": "transcript.docx"})
+        assert not r.is_error, r.content
+        assert r.structured_content["format"] == "docx"
+        assert r.structured_content["text"] == "Протокол встречи PBR\nАнна: бюджет согласован."
+        r = await c.call_tool("get_attachment", {"message_id": "msg-1", "attachment": "nope.pdf"})
+        assert r.is_error and "transcript.docx" in r.content[0].text
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+def test_requested_fields_exist_in_exchangelib():
+    """A misspelt field fails only against a real server, before any request is made."""
+    from exchangelib import Message
+
+    from owa_mail_mcp import ews_backend
+
+    names = {f.name for f in Message.FIELDS} | {"id", "changekey"}
+    for group in (ews_backend._HEADER_FIELDS, ews_backend._SUMMARY_FIELDS, ews_backend._FULL_FIELDS):
+        assert set(group) <= names, set(group) - names

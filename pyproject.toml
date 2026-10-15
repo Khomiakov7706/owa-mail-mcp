@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "owa-mail-mcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "MCP server for Exchange / OWA mail: check, search, read threads, find senders, send only after the user confirms in a local window."
 readme = "README.md"
 license = "MIT"
@@ -13,6 +13,7 @@ dependencies = [
     "mcp>=2.3,<3",
     "exchangelib>=5.4,<6",
     "keyring>=24",
+    "pypdf>=4",
 ]
 
 [project.optional-dependencies]

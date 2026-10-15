@@ -8,7 +8,7 @@ import threading
 from dataclasses import replace
 from datetime import datetime, timedelta
 
-from .backend import BackendError, FolderScope, SearchQuery, SearchResult
+from .backend import AttachmentData, BackendError, FolderScope, SearchQuery, SearchResult, pick_attachment
 from .models import Message, MessageSummary, Outgoing, Person
 from .text import preview
 from .when import now
@@ -60,7 +60,11 @@ class DemoBackend:
         add(anna, [ME, oleg], "RE: Бюджет Q4: черновик", "Ок, ставлю встречу на четверг 15:00. До неё нужна оценка сдвига от Олега.", 3, is_read=False, conv="c-budget")
         add(maria, [ME], "Отпуск в ноябре", "Иван, подтвердите, пожалуйста, ваш отпуск с 10 по 21 ноября до конца недели.", 20, is_read=False, conv="c-vacation")
         add(john, [ME], "Contract renewal 2027", "Hi Ivan,\n\nOur contract expires on Dec 31. Could we schedule a call next week to discuss renewal terms?\n\nBest,\nJohn", 8, is_read=False, conv="c-contract")
-        add(oleg, [ME], "Инцидент в проде: разбор", "Коротко: в 02:10 упал платёжный шлюз, восстановили за 40 минут. Постмортем в приложении.", 30, conv="c-incident", attachments=["postmortem.pdf"])
+        add(oleg, [ME], "Инцидент в проде: разбор", "Коротко: в 02:10 упал платёжный шлюз, восстановили за 40 минут. Постмортем в приложении.", 30, conv="c-incident", attachments=["postmortem.txt"])
+        self.files = {
+            "postmortem.txt": ("text/plain", "Постмортем\n02:10 — отказ платёжного шлюза.\n02:50 — восстановлено.\nПричина: истёк сертификат.".encode()),
+            "budget_q4.xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", b"PK..."),
+        }
 
     # --- MailBackend -------------------------------------------------------------------------
 
@@ -122,6 +126,12 @@ class DemoBackend:
     def scan_headers(self, folder: FolderScope, since, until, max_items: int) -> list[MessageSummary]:
         result = self.search(SearchQuery(folder=folder, since=since, until=until, limit=max_items))
         return result.messages
+
+    def read_attachment(self, message_id: str, attachment: str) -> AttachmentData:
+        msg = self.get_message(message_id)
+        name = pick_attachment(msg.attachments, attachment, lambda n: n)
+        content_type, data = self.files.get(name, (None, b""))
+        return AttachmentData(name=name, content_type=content_type, size=len(data), data=data)
 
     def find_people(self, query: str, limit: int) -> list[Person]:
         q = query.lower().strip()

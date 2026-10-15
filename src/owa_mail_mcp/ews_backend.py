@@ -22,7 +22,6 @@ from exchangelib import (
     Configuration,
     Credentials,
     EWSDateTime,
-    FolderCollection,
     HTMLBody,
     Mailbox,
     Q,
@@ -38,11 +37,13 @@ from exchangelib.errors import (
     UnauthorizedError,
 )
 from exchangelib.items import Message as _EwsMessageType
+from exchangelib.attachments import FileAttachment
 from exchangelib.properties import ItemId
 from exchangelib.protocol import BaseProtocol
 from exchangelib.transport import BASIC, DIGEST, GSSAPI, NTLM, SSPI
 
-from .backend import AuthenticationError, BackendError, FolderScope, SearchQuery, SearchResult
+from .attachments import MAX_BYTES
+from .backend import AttachmentData, AuthenticationError, BackendError, FolderScope, SearchQuery, SearchResult, pick_attachment
 from .config import Settings
 from .models import Message, MessageSummary, Outgoing, Person
 from .text import html_to_text, normalize_whitespace, preview
@@ -116,8 +117,10 @@ _SUMMARY_FIELDS = (
     "conversation_id", "body", "to_recipients", "cc_recipients",
 )
 _HEADER_FIELDS = ("id", "subject", "sender", "datetime_received", "is_read", "has_attachments", "importance", "conversation_id")
-_FULL_FIELDS = _SUMMARY_FIELDS + ("attachments", "internet_message_id", "in_reply_to", "categories", "conversation_topic")
+_FULL_FIELDS = _SUMMARY_FIELDS + ("attachments", "message_id", "in_reply_to", "categories", "conversation_topic")
 _SCAN_CAP = 500
+_MAX_FOLDERS = 40
+_EPOCH = EWSDateTime(1970, 1, 1, tzinfo=ZoneInfo("UTC"))
 _FOLDER_CACHE_SECONDS = 600
 
 
@@ -225,23 +228,52 @@ class EWSBackend:
         cached = self._folders.get(scope)
         if cached and time.monotonic() - cached[0] < _FOLDER_CACHE_SECONDS:
             return cached[1]
-        skip = {f.id for f in (a.trash, a.junk, a.drafts, a.outbox) if f is not None}
 
         def walk():
+            skip = set()
+            for name in ("trash", "junk", "drafts", "outbox"):
+                try:
+                    folder = getattr(a, name)
+                except Exception:  # a mailbox may lack one of them
+                    continue
+                if folder is not None:
+                    skip.add(folder.id)
             out = []
             for folder in a.msg_folder_root.walk():
                 if getattr(folder, "folder_class", None) == "IPF.Note" and folder.id not in skip:
                     out.append(folder)
             return out
 
-        folders = self._call(walk)
-        ids = {f.id for f in folders}
-        folders += [f for f in (a.inbox, a.sent) if f.id not in ids]
+        found = self._call(walk)
+        # Inbox and Sent first: most searches end there, and the folder cap must not cut them.
+        first = [a.inbox, a.sent]
+        ids = {f.id for f in first}
+        folders = (first + [f for f in found if f.id not in ids])[:_MAX_FOLDERS]
         self._folders[scope] = (time.monotonic(), folders)
         return folders
 
-    def _collection(self, scope: FolderScope) -> FolderCollection:
-        return FolderCollection(account=self.account, folders=self._scope_folders(scope))
+    def _fetch_many(self, ids: list[str], fields) -> list:
+        """GetItem for message ids, with fields validated against a mail folder."""
+        if not ids:
+            return []
+        return list(self.account.fetch(ids=[ItemId(id=i) for i in ids], folder=self.account.inbox, only_fields=list(fields)))
+
+    def _find_per_folder(self, scope: FolderScope, make_qs, per_folder: int, accept=None) -> tuple[list, int]:
+        """Runs the query in each folder separately and merges by date, newest first.
+
+        Exchange refuses one FindItem over several folders when it sees the search as one in a
+        shared mailbox ("Shared folder search cannot be performed on multiple folders"), which
+        happens e.g. when the configured address is an alias of the mailbox. One folder at a time
+        always works.
+        """
+        hits, scanned = [], 0
+        for folder in self._scope_folders(scope):
+            for item in make_qs(folder)[:per_folder]:
+                scanned += 1
+                if isinstance(item, _EwsMessageType) and (accept is None or accept(item)):
+                    hits.append(item)
+        hits.sort(key=lambda i: i.datetime_received or _EPOCH, reverse=True)
+        return hits, scanned
 
     # --- mapping -----------------------------------------------------------------------------
 
@@ -284,7 +316,7 @@ class EWSBackend:
             **summary.__dict__,
             body=self._body_text(item.body),
             attachments=[getattr(att, "name", None) or "attachment" for att in (item.attachments or [])],
-            internet_message_id=item.internet_message_id,
+            internet_message_id=item.message_id,
             in_reply_to=item.in_reply_to,
             categories=list(item.categories or []),
         )
@@ -292,7 +324,7 @@ class EWSBackend:
     def _fetch(self, message_id: str, fields=_FULL_FIELDS):
         def run():
             try:
-                results = list(self.account.fetch(ids=[ItemId(id=message_id)], only_fields=list(fields)))
+                results = self._fetch_many([message_id], fields)
             except (ErrorItemNotFound, ErrorInvalidIdMalformed):
                 results = []
             return results
@@ -325,7 +357,6 @@ class EWSBackend:
         return self._call(run)
 
     def search(self, query: SearchQuery) -> SearchResult:
-        collection = self._collection(query.folder)
         aqs = []
         if query.text:
             aqs.append(query.text.strip())
@@ -342,28 +373,29 @@ class EWSBackend:
         if query.has_attachments is not None:
             conditions.append(Q(has_attachments=query.has_attachments))
 
-        def run() -> SearchResult:
+        def make_qs(folder):
             if aqs:
                 # EWS takes either a search string or a restriction, not both: dates and flags are
                 # then checked here, over the newest matches.
-                qs = collection.filter(" ".join(aqs))
+                qs = folder.filter(" ".join(aqs))
             else:
-                qs = collection.filter(*conditions) if conditions else collection.all()
+                qs = folder.filter(*conditions) if conditions else folder.all()
             # Headers first (one cheap FindItem per page), bodies only for what is returned.
             qs = qs.order_by("-datetime_received").only(*_HEADER_FIELDS)
             qs.page_size = 100
-            hits = []
-            scanned = 0
-            for item in qs[:_SCAN_CAP] if aqs else qs[: query.limit + 1]:
-                scanned += 1
-                if isinstance(item, _EwsMessageType) and (not aqs or _matches(item, query)):
-                    hits.append(item)
-                    if len(hits) > query.limit:
-                        break
+            return qs
+
+        def run() -> SearchResult:
+            per_folder = _SCAN_CAP if aqs else query.limit + 1
+            hits, scanned = self._find_per_folder(query.folder, make_qs, per_folder, accept=(lambda i: _matches(i, query)) if aqs else None)
             complete = len(hits) <= query.limit and not (aqs and scanned >= _SCAN_CAP)
             hits = hits[: query.limit]
             folders = {item.id: getattr(getattr(item, "folder", None), "name", "") for item in hits}
-            full = self.account.fetch(ids=[ItemId(id=item.id) for item in hits], only_fields=list(_SUMMARY_FIELDS)) if hits else []
+            order = {item.id: n for n, item in enumerate(hits)}
+            full = sorted(
+                (i for i in self._fetch_many([item.id for item in hits], _SUMMARY_FIELDS) if isinstance(i, _EwsMessageType)),
+                key=lambda i: order.get(i.id, 0),
+            )
             found = []
             for item in full:
                 if isinstance(item, _EwsMessageType):
@@ -379,32 +411,56 @@ class EWSBackend:
 
     def get_thread(self, message_id: str, max_messages: int) -> list[Message]:
         anchor = self._fetch(message_id, ("id", "conversation_id", "conversation_topic", "subject"))
-        collection = self._collection("all")
+
+        def make_qs(folder):
+            if anchor.conversation_id is not None:
+                qs = folder.filter(conversation_id=anchor.conversation_id)
+            else:
+                qs = folder.filter(conversation_topic=anchor.conversation_topic or anchor.subject or "")
+            return qs.order_by("-datetime_received").only(*_HEADER_FIELDS)
 
         def run():
-            if anchor.conversation_id is not None:
-                qs = collection.filter(conversation_id=anchor.conversation_id)
-            else:
-                qs = collection.filter(conversation_topic=anchor.conversation_topic or anchor.subject or "")
-            items = list(qs.order_by("-datetime_received").only(*_FULL_FIELDS)[:max_messages])
-            return [self._message(i) for i in reversed(items) if isinstance(i, _EwsMessageType)]
+            hits, _ = self._find_per_folder("all", make_qs, max_messages)
+            newest = [h.id for h in hits[:max_messages]]
+            order = {mid: n for n, mid in enumerate(newest)}
+            full = [i for i in self._fetch_many(newest, _FULL_FIELDS) if isinstance(i, _EwsMessageType)]
+            full.sort(key=lambda i: order.get(i.id, 0), reverse=True)  # oldest first
+            return [self._message(i) for i in full]
 
         messages = self._call(run)
         return messages or [self.get_message(message_id)]
 
     def scan_headers(self, folder: FolderScope, since: datetime | None, until: datetime | None, max_items: int) -> list[MessageSummary]:
         conditions = _date_conditions(since, until)
-        collection = self._collection(folder)
+        # Recipients are not in FindItem's answer: for Sent they cost a GetItem per page.
+        fields = _HEADER_FIELDS + (("to_recipients",) if folder == "sent" else ())
 
-        def run():
-            qs = collection.filter(*conditions) if conditions else collection.all()
-            # Recipients are not in FindItem's answer: for Sent they cost a GetItem per page.
-            fields = _HEADER_FIELDS + (("to_recipients",) if folder == "sent" else ())
+        def make_qs(f):
+            qs = f.filter(*conditions) if conditions else f.all()
             qs = qs.order_by("-datetime_received").only(*fields)
             qs.page_size = 200
-            return [self._summary(i, with_preview=False) for i in qs[:max_items] if isinstance(i, _EwsMessageType)]
+            return qs
+
+        def run():
+            hits, _ = self._find_per_folder(folder, make_qs, max_items)
+            return [self._summary(i, with_preview=False) for i in hits[:max_items]]
 
         return self._call(run)
+
+    def read_attachment(self, message_id: str, attachment: str) -> AttachmentData:
+        item = self._fetch(message_id, ("id", "subject", "attachments"))
+        att = pick_attachment(list(item.attachments or []), attachment, lambda a: getattr(a, "name", None) or "")
+        name = getattr(att, "name", None) or "attachment"
+        size = getattr(att, "size", None)
+        if isinstance(att, FileAttachment):
+            if size and size > MAX_BYTES:
+                raise BackendError(f"{name} is {size // 1024 // 1024} MB; only files up to {MAX_BYTES // 1024 // 1024} MB are read.")
+            data = self._call(lambda: att.content)
+            return AttachmentData(name=name, content_type=att.content_type, size=size or len(data or b""), data=data)
+        inner = getattr(att, "item", None)
+        text = self._body_text(getattr(inner, "body", None)) if inner is not None else ""
+        subject = getattr(inner, "subject", "") or ""
+        return AttachmentData(name=name, content_type="message/rfc822", size=size, text=(f"Subject: {subject}\n\n" if subject else "") + text)
 
     def find_people(self, query: str, limit: int) -> list[Person]:
         a = self.account

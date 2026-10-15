@@ -18,6 +18,22 @@ class BackendError(Exception):
     """A failure the agent should read: bad id, server said no, and so on."""
 
 
+def pick_attachment(attachments: list, wanted: str, name_of) -> object:
+    """By exact name, then case-insensitive, then by position ("2" or "#2")."""
+    if not attachments:
+        raise BackendError("This message has no attachments.")
+    wanted = (wanted or "").strip()
+    for match in (lambda n: n == wanted, lambda n: n.lower() == wanted.lower()):
+        for att in attachments:
+            if match(name_of(att)):
+                return att
+    number = wanted.lstrip("#")
+    if number.isdigit() and 1 <= int(number) <= len(attachments):
+        return attachments[int(number) - 1]
+    names = ", ".join(repr(name_of(a)) for a in attachments)
+    raise BackendError(f"No attachment {wanted!r}. This message has: {names}.")
+
+
 class AuthenticationError(BackendError):
     """The server rejected the credentials. The server stops calling Exchange after this."""
 
@@ -44,6 +60,16 @@ class SearchResult:
     complete: bool
 
 
+@dataclass
+class AttachmentData:
+    name: str
+    content_type: str | None
+    size: int | None
+    data: bytes | None = None
+    """The file's bytes; None for an attached email, whose text is in `text`."""
+    text: str | None = None
+
+
 class MailBackend(Protocol):
     name: str
 
@@ -62,6 +88,10 @@ class MailBackend(Protocol):
 
     def scan_headers(self, folder: FolderScope, since: datetime | None, until: datetime | None, max_items: int) -> list[MessageSummary]:
         """Newest first, without bodies. Feeds the sender statistics."""
+        ...
+
+    def read_attachment(self, message_id: str, attachment: str) -> AttachmentData:
+        """`attachment`: the file name as get_message lists it, or its position (1, 2, ...)."""
         ...
 
     def find_people(self, query: str, limit: int) -> list[Person]:
