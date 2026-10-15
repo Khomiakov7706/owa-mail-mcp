@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Подтверждение отправки</title>
+<style nonce="{{NONCE}}">
+:root {
+  --bg: #f5f5f7; --card: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7;
+  --accent: #0a66d8; --accent-text: #ffffff; --danger: #c62828; --danger-bg: #fdecea;
+  --warn-bg: #fff4d6; --warn-text: #7a5300; --ok: #1b7f3b; --chip: #eef0f3;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161618; --card: #232326; --text: #f2f2f4; --muted: #a1a1a6; --line: #3a3a3e;
+    --accent: #3b8cff; --accent-text: #ffffff; --danger: #ff6b6b; --danger-bg: #3a1f1f;
+    --warn-bg: #3a3218; --warn-text: #f5d27a; --ok: #5fd38a; --chip: #2f2f33;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+header .sub { color: var(--muted); font-size: 13px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); flex: none; }
+.dot.off { background: var(--danger); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.card.pending { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 12px; }
+.who { font-weight: 600; }
+.timer { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timer.low { color: var(--danger); font-weight: 600; }
+.row { display: grid; grid-template-columns: 72px 1fr; gap: 8px; padding: 4px 0; align-items: start; }
+.row .k { color: var(--muted); font-size: 13px; padding-top: 3px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { background: var(--chip); border-radius: 999px; padding: 2px 10px; font-size: 13px; word-break: break-all; }
+.chip.ext { background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.subject { font-weight: 600; word-break: break-word; }
+pre.body { white-space: pre-wrap; word-break: break-word; font: inherit; background: var(--bg); border-radius: 8px; padding: 12px; margin: 10px 0 0; max-height: 50vh; overflow: auto; }
+.reply { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+.warn { background: var(--warn-bg); color: var(--warn-text); border-radius: 8px; padding: 8px 12px; margin-top: 10px; font-size: 13px; }
+.warn ul { margin: 0; padding-left: 18px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+button { font: inherit; border-radius: 8px; padding: 8px 16px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+button:disabled { opacity: .5; cursor: default; }
+label { display: block; font-size: 13px; color: var(--muted); margin-top: 10px; }
+input, textarea { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 4px; }
+textarea { min-height: 220px; resize: vertical; }
+.err { color: var(--danger); margin-top: 10px; font-size: 13px; }
+.done { display: flex; justify-content: space-between; gap: 12px; padding: 10px 14px; }
+.done .s { white-space: nowrap; font-size: 13px; }
+.s.sent { color: var(--ok); } .s.failed, .s.expired { color: var(--danger); } .s.rejected, .s.cancelled { color: var(--muted); }
+.empty { color: var(--muted); text-align: center; padding: 32px 0; }
+h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 26px 0 8px; }
+.ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="dot" id="dot"></span>
+    <div>
+      <h1>OWA Mail MCP — подтверждение отправки</h1>
+      <div class="sub">Письмо уходит только после нажатия «Отправить» здесь. Ассистент этой страницы не видит.</div>
+    </div>
+  </header>
+  <section id="pending"></section>
+  <h2 id="history-title" hidden>Недавние</h2>
+  <section id="history"></section>
+</main>
+<script nonce="{{NONCE}}">
+"use strict";
+const base = location.pathname.endsWith("/") ? location.pathname : location.pathname + "/";
+const STATUS = { sent: "Отправлено", failed: "Ошибка отправки", rejected: "Отменено вами", expired: "Время вышло — не отправлено",
+                 cancelled: "Ассистент отменил запрос", approved: "Отправляется…" };
+const editing = new Map();   // id -> draft being edited, so polling does not wipe what the user types
+const errors = new Map();
+let lastPendingIds = "";
+
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") node.className = v;
+    else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null && v !== false) node.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat()) if (c !== null && c !== undefined) node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return node;
+}
+
+function chips(list, external) {
+  const ext = new Set((external || []).map(e => e.toLowerCase()));
+  return el("div", { class: "chips" }, list.map(a => el("span", { class: "chip" + (ext.has(a.toLowerCase()) ? " ext" : ""),
+    title: ext.has(a.toLowerCase()) ? "Внешний адрес" : "" }, a + (ext.has(a.toLowerCase()) ? " · внешний" : ""))));
+}
+
+async function decide(id, action, edits) {
+  errors.delete(id);
+  try {
+    const res = await fetch(base + "api/decide", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action, edits }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) errors.set(id, data.error || ("HTTP " + res.status));
+    else editing.delete(id);
+  } catch (e) { errors.set(id, String(e)); }
+  refresh(true);
+}
+
+function pendingCard(item) {
+  const m = item.message;
+  const draft = editing.get(item.id);
+  const timer = el("span", { class: "timer" + (item.seconds_left <= 10 ? " low" : ""), "data-id": item.id }, `${item.seconds_left} с`);
+  const card = el("div", { class: "card pending" },
+    el("div", { class: "top" },
+      el("div", { class: "who" }, (item.client || "MCP-клиент") + " просит отправить письмо"), timer),
+    item.reply_context ? el("div", { class: "reply" }, `Ответ на «${item.reply_context.subject}» от ${item.reply_context.from || "?"}`) : null);
+
+  if (draft) {
+    const f = {};
+    const field = (key, label, multiline) => {
+      const input = multiline ? el("textarea", {}) : el("input", { type: "text" });
+      input.value = draft[key];
+      input.addEventListener("input", () => { draft[key] = input.value; });
+      f[key] = input;
+      return [el("label", {}, label), input];
+    };
+    card.append(...field("to", "Кому (через запятую)"), ...field("cc", "Копия"), ...field("bcc", "Скрытая копия"),
+                ...field("subject", "Тема"), ...field("body", "Текст", true));
+    card.append(el("div", { class: "actions" },
+      el("button", { class: "primary", onclick: () => decide(item.id, "approve", draft) }, "Отправить с правками"),
+      el("button", { onclick: () => { editing.delete(item.id); render(window.__items || []); } }, "Отменить правки"),
+      el("button", { onclick: () => decide(item.id, "reject") }, "Не отправлять")));
+  } else {
+    card.append(el("div", {},
+      el("div", { class: "row" }, el("div", { class: "k" }, "От"), el("div", {}, item.from || "")),
+      el("div", { class: "row" }, el("div", { class: "k" }, "Кому"), chips(m.to, item.external)),
+      m.cc.length ? el("div", { class: "row" }, el("div", { class: "k" }, "Копия"), chips(m.cc, item.external)) : null,
+      m.bcc.length ? el("div", { class: "row" }, el("div", { class: "k" }, "Скрытая"), chips(m.bcc, item.external)) : null,
+      el("div", { class: "row" }, el("div", { class: "k" }, "Тема"), el("div", { class: "subject" }, m.subject)),
+      el("pre", { class: "body" }, m.body)));
+    const warnings = [...(item.external.length ? [`Внешние получатели: ${item.external.length}`] : []), ...item.warnings];
+    if (warnings.length) card.append(el("div", { class: "warn" }, el("ul", {}, warnings.map(w => el("li", {}, w)))));
+    card.append(el("div", { class: "actions" },
+      el("button", { class: "primary", onclick: (e) => { e.target.disabled = true; decide(item.id, "approve"); } }, "Отправить"),
+      el("button", { onclick: () => { editing.set(item.id, { to: m.to.join(", "), cc: m.cc.join(", "), bcc: m.bcc.join(", "), subject: m.subject, body: m.body }); render(window.__items || []); } }, "Изменить"),
+      el("button", { onclick: () => decide(item.id, "reject") }, "Не отправлять")));
+  }
+  if (errors.has(item.id)) card.append(el("div", { class: "err" }, errors.get(item.id)));
+  return card;
+}
+
+function historyRow(item) {
+  const m = item.message;
+  return el("div", { class: "card done" },
+    el("div", { class: "ell" }, el("span", { class: "subject" }, m.subject), " → ", m.to.join(", "), item.edited ? " (с вашими правками)" : ""),
+    el("div", { class: "s " + item.status }, STATUS[item.status] || item.status, item.error ? `: ${item.error}` : ""));
+}
+
+function render(items) {
+  window.__items = items;
+  const pending = items.filter(i => i.status === "pending");
+  const ids = pending.map(i => i.id).join(",");
+  const pendingBox = document.getElementById("pending");
+  // While the user edits, only the timers move: re-rendering would steal the cursor.
+  if (ids === lastPendingIds && editing.size) {
+    for (const i of pending) {
+      const t = pendingBox.querySelector(`.timer[data-id="${i.id}"]`);
+      if (t) { t.textContent = `${i.seconds_left} с`; t.className = "timer" + (i.seconds_left <= 10 ? " low" : ""); }
+    }
+  } else {
+    pendingBox.replaceChildren(...(pending.length ? pending.map(pendingCard) : [el("div", { class: "empty" }, "Нет писем, ожидающих подтверждения.")]));
+  }
+  lastPendingIds = ids;
+  for (const id of [...editing.keys()]) if (!pending.some(i => i.id === id)) editing.delete(id);
+  const done = items.filter(i => i.status !== "pending");
+  document.getElementById("history-title").hidden = !done.length;
+  document.getElementById("history").replaceChildren(...done.slice(0, 10).map(historyRow));
+  document.title = pending.length ? `(${pending.length}) Подтвердите отправку` : "Подтверждение отправки";
+}
+
+async function refresh() {
+  try {
+    const res = await fetch(base + "api/pending", { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    document.getElementById("dot").classList.remove("off");
+    render(data.items);
+  } catch (e) {
+    document.getElementById("dot").classList.add("off");
+  }
+}
+refresh();
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>
