@@ -1,62 +1,62 @@
 (function () {
-  // Theme: follows the system until the visitor picks one.
-  var themeButton = document.getElementById('theme');
-  var media = window.matchMedia('(prefers-color-scheme: dark)');
-  function current() { return document.documentElement.dataset.theme || (media.matches ? 'dark' : 'light'); }
-  function label() {
-    var text = current() === 'dark' ? 'Светлая тема' : 'Тёмная тема';
-    themeButton.setAttribute('aria-label', text);
-    themeButton.title = text;
-  }
-  themeButton.addEventListener('click', function () {
+  var root = document.documentElement;
+
+  // Theme: dark by default, follows the system until the visitor picks one.
+  var button = document.getElementById('theme');
+  var light = window.matchMedia('(prefers-color-scheme: light)');
+  function current() { return root.dataset.theme || (light.matches ? 'light' : 'dark'); }
+  function label() { button.title = current() === 'dark' ? 'Светлая тема' : 'Тёмная тема'; }
+  button.addEventListener('click', function () {
     var next = current() === 'dark' ? 'light' : 'dark';
-    document.documentElement.dataset.theme = next;
+    root.dataset.theme = next;
     try { localStorage.setItem('owa-mail-theme', next); } catch (e) {}
     label();
   });
-  if (!document.documentElement.dataset.theme) document.documentElement.dataset.theme = current();
-  media.addEventListener('change', function () {
-    var saved = null;
-    try { saved = localStorage.getItem('owa-mail-theme'); } catch (e) {}
-    if (!saved) { document.documentElement.dataset.theme = media.matches ? 'dark' : 'light'; label(); }
-  });
   label();
 
-  // The section for the visitor's current time of day gets the dot on the rail.
-  function tick() {
-    var d = new Date(), mins = d.getHours() * 60 + d.getMinutes(), now = null;
-    document.querySelectorAll('.slot[data-t]').forEach(function (s) {
-      var p = s.dataset.t.split(':');
-      s.classList.remove('is-now');
-      if (+p[0] * 60 + +p[1] <= mins) now = s;
-    });
-    if (now) now.classList.add('is-now');
-  }
-  tick();
-  setInterval(tick, 30000);
-
   // Copy buttons.
-  document.querySelectorAll('[data-copy]').forEach(function (button) {
-    var original = button.textContent;
-    button.addEventListener('click', function () {
-      var source = document.querySelector(button.dataset.copy);
-      var text = source ? source.textContent : '';
-      var done = function () {
-        button.textContent = 'Скопировано';
-        button.classList.add('done');
-        setTimeout(function () { button.textContent = original; button.classList.remove('done'); }, 1600);
-      };
-      if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {});
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    var html = b.innerHTML;
+    b.addEventListener('click', function () {
+      var el = document.querySelector(b.dataset.copy);
+      if (!el || !navigator.clipboard) return;
+      navigator.clipboard.writeText(el.textContent.trim()).then(function () {
+        b.textContent = 'Скопировано';
+        b.classList.add('done');
+        setTimeout(function () { b.innerHTML = html; b.classList.remove('done'); }, 1600);
+      }, function () {});
     });
   });
 
-  // Client tabs.
-  document.querySelectorAll('.tabs [data-tab]').forEach(function (tab) {
-    tab.addEventListener('click', function () {
-      var box = tab.closest('.clients');
-      box.querySelectorAll('[data-tab]').forEach(function (t) { t.setAttribute('aria-selected', String(t === tab)); });
-      box.querySelectorAll('[data-panel]').forEach(function (p) { p.classList.toggle('on', p.dataset.panel === tab.dataset.tab); });
+  // Tabs (WAI-ARIA pattern). Panels stay in the HTML, so readers without JS and agents see all of them.
+  document.querySelectorAll('[data-tabs]').forEach(function (box) {
+    var tabs = Array.prototype.slice.call(box.querySelectorAll('[role="tab"]'));
+    function select(tab, focus) {
+      tabs.forEach(function (t) {
+        var on = t === tab;
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+        document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+      });
+      if (focus) tab.focus();
+    }
+    // Every panel is visible in the HTML itself (for agents and readers without JS); hide the
+    // inactive ones only now.
+    select(tabs.filter(function (t) { return t.getAttribute('aria-selected') === 'true'; })[0] || tabs[0]);
+    tabs.forEach(function (tab, i) {
+      tab.addEventListener('click', function () { select(tab); });
+      tab.addEventListener('keydown', function (e) {
+        var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (d) { e.preventDefault(); select(tabs[(i + d + tabs.length) % tabs.length], true); }
+      });
     });
+  });
+
+  // "Install through your agent" link opens the matching tab.
+  var agentLink = document.querySelector('a[href="#agents"]');
+  if (agentLink) agentLink.addEventListener('click', function () {
+    var t = document.getElementById('t-agent');
+    if (t) t.click();
   });
 
   // Current version from the repository; the static label stays if the request fails.

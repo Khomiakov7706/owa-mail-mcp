@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://khomiakov7706.github.io/owa-mail-mcp/sitemap.xml
