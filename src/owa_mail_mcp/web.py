@@ -115,7 +115,7 @@ class LocalWebApp:
                 handler = app._get.get(route)
                 if handler is None:
                     return self._send(404, b"not found", "text/plain")
-                self._json(*handler())
+                self._reply(handler)
 
             def do_POST(self) -> None:  # noqa: N802
                 route = self._route()
@@ -136,9 +136,20 @@ class LocalWebApp:
                         raise ValueError
                 except ValueError:
                     return self._json(400, {"error": "bad request"})
+                self._reply(lambda: handler(data))
+
+            def _reply(self, call) -> None:
+                # Bad input from the page is a 400; anything else is our bug and says so.
                 try:
-                    self._json(*handler(data))
+                    status, payload = call()
                 except (KeyError, TypeError, ValueError) as exc:
-                    self._json(400, {"error": f"bad request: {exc}"})
+                    return self._json(400, {"ok": False, "error": f"bad request: {exc}"})
+                except Exception as exc:
+                    return self._json(500, {"ok": False, "error": f"internal error: {type(exc).__name__}: {exc}"})
+                try:
+                    body = json.dumps(payload, ensure_ascii=False, default=str).encode()
+                except (TypeError, ValueError) as exc:
+                    return self._json(500, {"ok": False, "error": f"internal error: {exc}"})
+                self._send(status, body, "application/json; charset=utf-8")
 
         return Handler

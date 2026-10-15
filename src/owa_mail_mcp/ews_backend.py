@@ -316,7 +316,13 @@ class EWSBackend:
         return Person(email=a.primary_smtp_address, name=name)
 
     def unread_count(self) -> int | None:
-        return self._call(lambda: self.account.inbox.refresh() or self.account.inbox.unread_count)
+        def run() -> int | None:
+            inbox = self.account.inbox
+            inbox.refresh()  # returns the folder itself, not None: keep it out of the return value
+            count = inbox.unread_count
+            return int(count) if count is not None else None
+
+        return self._call(run)
 
     def search(self, query: SearchQuery) -> SearchResult:
         collection = self._collection(query.folder)
