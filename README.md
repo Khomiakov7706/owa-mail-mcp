@@ -14,14 +14,33 @@ MCP-сервер для почты Microsoft Exchange / OWA. Даёт AI-асс�
 
 ## Быстрый старт
 
-Нужен Python 3.10+ и доступ к Exchange (если почта открывается только из корпоративной сети, включите VPN).
+macOS или Linux, одна команда в терминале:
 
 ```bash
-pipx install "git+https://github.com/Khomiakov7706/owa-mail-mcp"
-owa-mail-mcp
+curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh
 ```
 
-Запущенная в терминале команда открывает в браузере окно настройки. В нём три шага, как в настройках mac-owa-widget:
+Скрипт ставит [uv](https://docs.astral.sh/uv/) (менеджер Python от Astral), а через него — owa-mail-mcp в отдельное окружение на Python 3.12, который uv скачает сам. Системный Python не используется: на macOS это 3.9, а MCP SDK нужен 3.10+. Повторный запуск обновляет программу. В конце открывается окно настройки. Если почта открывается только из корпоративной сети, включите VPN.
+
+<details>
+<summary>Другие способы установки</summary>
+
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+uv tool install --python 3.12 git+https://github.com/Khomiakov7706/owa-mail-mcp
+owa-mail-mcp setup
+```
+
+Если uv уже есть: `uv tool install --python 3.12 git+https://github.com/Khomiakov7706/owa-mail-mcp`.
+
+pipx с Python 3.10+: `pipx install --python python3.12 git+https://github.com/Khomiakov7706/owa-mail-mcp`.
+
+Ошибка `Could not find a version that satisfies the requirement mcp` означает, что установка шла системным Python 3.9: используйте скрипт выше или uv.
+</details>
+
+Окно настройки открывается в браузере. В нём три шага, как в настройках mac-owa-widget:
 
 1. **Почтовый ящик Exchange.** Адрес веб-почты, почта, логин (`DOMAIN\login`, если вход Windows) и пароль, затем «Проверить подключение». При успехе видно ваше имя, число непрочитанных и последние письма. Если сервер недоступен, окно подскажет про VPN; если не подошёл пароль, так и скажет. Пароль сохраняется в системной связке ключей (Keychain, Credential Manager, Secret Service), а не в файле.
 2. **Что разрешено ассистенту.** По умолчанию только чтение. Переключатель «Разрешить отправку писем»; каждое письмо всё равно подтверждаете вы.
@@ -47,7 +66,7 @@ claude mcp add owa-mail-demo -e OWA_MAIL_BACKEND=demo -e OWA_MAIL_ALLOW_SEND=1 -
 
 | Команда | Что делает |
 |---|---|
-| `owa-mail-mcp` | В терминале открывает окно настройки; запущенная MCP-клиентом работает как stdio-сервер |
+| `owa-mail-mcp` | В терминале открывает окно настройки (новый терминал после установки: скрипт добавляет `~/.local/bin` в PATH); запущенная MCP-клиентом работает как stdio-сервер |
 | `owa-mail-mcp setup` | Окно настройки (`--no-browser` — только вывести адрес) |
 | `owa-mail-mcp serve` | MCP-сервер по stdio |
 | `owa-mail-mcp check` | Проверить сохранённое подключение из терминала |
