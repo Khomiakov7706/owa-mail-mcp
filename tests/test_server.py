@@ -200,3 +200,26 @@ async def test_auth_failure_latches(backend):
         r2 = await c.call_tool("check_mail", {})
     assert r1.is_error and r2.is_error and "rejected" in r2.content[0].text
     assert len(calls) == 1
+
+
+async def test_errors_say_when_the_server_runs_old_code(backend, monkeypatch):
+    from owa_mail_mcp import runtime
+    from owa_mail_mcp.backend import BackendError
+
+    def broken(*args, **kwargs):
+        raise BackendError("Cannot reach Exchange.")
+
+    def surprise(*args, **kwargs):
+        raise RuntimeError("odd server answer")
+
+    backend.unread_count = broken
+    backend.search = surprise
+    mcp, _ = build_server(Settings(backend="demo"), backend)
+    async with Client(mcp) as c:
+        r = await c.call_tool("check_mail", {})
+        assert r.is_error and "Unexpected error from the mail backend: RuntimeError: odd server answer" in r.content[0].text
+        assert "updated after this server process started" not in r.content[0].text
+        monkeypatch.setattr(runtime, "_STARTED_WITH", -100.0)
+        r = await c.call_tool("get_status", {})
+        assert r.is_error and "Cannot reach Exchange." in r.content[0].text
+        assert "updated after this server process started" in r.content[0].text and "Reconnect" in r.content[0].text

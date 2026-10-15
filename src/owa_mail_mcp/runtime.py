@@ -96,6 +96,32 @@ def _file_stamp() -> object:
         return None
 
 
+# --- updates while running -------------------------------------------------------------------
+# An MCP client starts the server once and keeps it; reinstalling replaces the files on disk but
+# not the code already loaded. Noticing that turns a baffling old bug into "restart the server".
+
+def _code_stamp() -> float:
+    package = os.path.dirname(os.path.abspath(__file__))
+    try:
+        return max(os.path.getmtime(os.path.join(package, f)) for f in os.listdir(package) if f.endswith((".py", ".html")))
+    except (OSError, ValueError):
+        return 0.0
+
+
+_STARTED_WITH = _code_stamp()
+
+
+def code_updated_since_start() -> bool:
+    return _code_stamp() > _STARTED_WITH + 1
+
+
+UPDATED_HINT = (
+    " Note: OWA Mail MCP was updated after this server process started, so it is still running the old code. "
+    "Ask the user to restart the MCP server in their client (Claude Code: /mcp → owa-mail → Reconnect; "
+    "Claude Desktop or Cursor: quit and reopen the app), then try again."
+)
+
+
 # --- journal ------------------------------------------------------------------------------------
 # What the assistant called and when, without arguments or results: no mail content on disk.
 

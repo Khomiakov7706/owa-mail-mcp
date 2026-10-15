@@ -16,7 +16,7 @@ from pydantic import Field
 
 from . import __version__
 from .backend import AuthenticationError, BackendError, MailBackend, SearchQuery
-from .runtime import NotConfigured, Runtime, record_call
+from .runtime import UPDATED_HINT, NotConfigured, Runtime, code_updated_since_start, record_call
 from .config import Settings
 from .confirm import BrokerBusy, ConfirmationBroker, Status
 from .models import Message, Outgoing
@@ -103,9 +103,12 @@ class MailTools:
             raise ToolError(str(exc) + hint) from None
         except AuthenticationError as exc:
             self.guard.block(str(exc))
-            raise ToolError(str(exc)) from None
+            raise ToolError(str(exc) + _update_hint()) from None
         except BackendError as exc:
-            raise ToolError(str(exc)) from None
+            raise ToolError(str(exc) + _update_hint()) from None
+        except Exception as exc:  # an exchangelib surprise: say what it was instead of an empty error
+            log.exception("unexpected error in %s", getattr(fn, "__name__", fn))
+            raise ToolError(f"Unexpected error from the mail backend: {type(exc).__name__}: {exc}" + _update_hint()) from None
 
     async def my_email(self) -> str | None:
         if not self._me:
@@ -257,6 +260,10 @@ async def _journal_middleware(ctx, call_next):
     return result
 
 
+def _update_hint() -> str:
+    return UPDATED_HINT if code_updated_since_start() else ""
+
+
 def _client_name(ctx: Context | None) -> str:
     try:
         info = ctx.session.client_params.client_info  # type: ignore[union-attr]
@@ -301,6 +308,8 @@ def build_server(
             "unread_in_inbox": unread,
             "send_enabled": settings.allow_send,
             "blocked_reason": tools.guard.blocked_reason,
+            "version": __version__,
+            "restart_needed": code_updated_since_start(),
         }
 
     @mcp.tool(title="Check mail", annotations=READ_ONLY)
