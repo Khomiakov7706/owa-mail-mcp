@@ -12,6 +12,8 @@ import threading
 import time
 from datetime import datetime
 from urllib.parse import urlparse
+
+import requests
 from zoneinfo import ZoneInfo
 
 from exchangelib import (
@@ -48,6 +50,63 @@ from .tls import PinningAdapter, apply_transport_settings
 
 # Every exchangelib session goes through the adapter that honours the certificates the user trusted.
 BaseProtocol.HTTP_ADAPTER_CLS = PinningAdapter
+
+
+def _owa_url(endpoint: str) -> str:
+    parsed = urlparse(endpoint)
+    return f"{parsed.scheme}://{parsed.netloc}/owa/"
+
+
+def warm_up(session, endpoint: str) -> None:  # noqa: ANN001
+    """Signs in to OWA on this session, leaving an authenticated keep-alive connection in its pool.
+
+    Some Exchange front ends (reverse proxies, WAF rules) drop EWS requests that arrive on a
+    connection that has not signed in yet, without any answer, while OWA on the same host works.
+    Windows sign-in (NTLM/Negotiate) belongs to the TCP connection, so a GET to /owa/ first
+    authenticates the connection, and the EWS requests that follow ride it.
+    """
+    try:
+        response = session.get(_owa_url(endpoint), allow_redirects=False, timeout=20)
+        response.content  # noqa: B018 — read it all, so the connection goes back to the pool
+    except requests.RequestException as exc:
+        log.debug("OWA warm-up failed: %s: %s", type(exc).__name__, exc)
+
+
+def _dropped_without_answer(exc: Exception) -> bool:
+    text = repr(exc)
+    return "RemoteDisconnected" in text or "Connection aborted" in text or "ConnectionResetError" in text
+
+
+_original_create_session = BaseProtocol.create_session
+
+
+def _create_session(self):  # noqa: ANN001
+    session = _original_create_session(self)
+    endpoint = self.service_endpoint
+    # exchangelib mounts its adapter on the EWS URL only. /owa/ must go through the very same
+    # adapter: same certificate pinning, and above all the same connection pool, or the
+    # signed-in connection would end up where EWS requests never look.
+    session.mount(_owa_url(endpoint), session.get_adapter(endpoint))
+    warm_up(session, endpoint)
+    plain_request = session.request
+
+    def request(method, url, *args, **kwargs):
+        try:
+            return plain_request(method, url, *args, **kwargs)
+        except requests.ConnectionError as exc:
+            # Dropped with no answer at all: the request never reached Exchange (a fresh
+            # connection the front end refused, or a keep-alive connection that timed out).
+            # Sign in on a new connection and send it once more.
+            if "/ews/" not in url.lower() or not _dropped_without_answer(exc):
+                raise
+            warm_up(session, endpoint)
+            return plain_request(method, url, *args, **kwargs)
+
+    session.request = request
+    return session
+
+
+BaseProtocol.create_session = _create_session
 
 log = logging.getLogger(__name__)
 

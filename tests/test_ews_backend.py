@@ -57,11 +57,11 @@ class FakeExchange(BaseHTTPRequestHandler):
             answer = CONVERT_ID
         elif "ResolveNames" in body:
             answer = RESOLVE_NAMES
-        else:
-            self.send_response(500)
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-            return
+        else:  # any other operation: a SOAP error with version headers, as Exchange does
+            answer = (
+                '<m:GetFolderResponse><m:ResponseMessages><m:GetFolderResponseMessage ResponseClass="Success">'
+                "<m:ResponseCode>NoError</m:ResponseCode></m:GetFolderResponseMessage></m:ResponseMessages></m:GetFolderResponse>"
+            )
         data = ENVELOPE.format(body=answer).encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/xml; charset=utf-8")
@@ -121,3 +121,63 @@ def test_unpinned_self_signed_certificate_is_refused(exchange):
         EWSBackend(_settings(port, fingerprint, pin=False)).whoami()
     with pytest.raises(CertificateProblem):
         EWSBackend(_settings(port, "00" * 32)).whoami()
+
+
+class GatedExchange(FakeExchange):
+    """Like the bank's front end: EWS requests on a connection that has not signed in to OWA are
+    dropped without an answer; after GET /owa/ with valid credentials, the connection is let through."""
+
+    protocol_version = "HTTP/1.1"
+
+    def setup(self):
+        super().setup()
+        self.signed_in = False
+
+    def do_GET(self):  # noqa: N802
+        expected = "Basic " + base64.b64encode(f"CORP\\ivan:{PASSWORD}".encode()).decode()
+        if self.path.startswith("/owa/") and self.headers.get("Authorization") == expected:
+            self.signed_in = True
+            body = b"<html><title>Outlook</title></html>"
+            self.send_response(200)
+        else:
+            body = b""
+            self.send_response(401)
+            self.send_header("WWW-Authenticate", 'Basic realm="owa"')
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):  # noqa: N802
+        if not self.signed_in:
+            self.close_connection = True  # no answer at all
+            return
+        super().do_POST()
+
+
+@pytest.fixture
+def gated_exchange():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), GatedExchange)
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(FIXTURES / "ews-cert.pem", FIXTURES / "ews-key.pem")
+    server.socket = ctx.wrap_socket(server.socket, server_side=True)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    der = ssl.PEM_cert_to_DER_cert((FIXTURES / "ews-cert.pem").read_text())
+    yield server.server_address[1], hashlib.sha256(der).hexdigest()
+    server.shutdown()
+
+
+def test_ews_behind_a_front_end_that_wants_owa_sign_in_first(gated_exchange):
+    port, fingerprint = gated_exchange
+    backend = EWSBackend(_settings(port, fingerprint))
+    assert backend.whoami().email == "ivan@corp.test"
+    assert backend.find_people("Петров", 5)[0].name == "Иван Петров"
+
+
+def test_diagnosis_finds_that_owa_sign_in_opens_ews(gated_exchange):
+    from owa_mail_mcp.diagnose import diagnose
+
+    port, fingerprint = gated_exchange
+    settings = _settings(port, fingerprint)
+    result = diagnose(settings, f"https://localhost:{port}/EWS/Exchange.asmx")
+    assert "только на соединении, которое сначала вошло в OWA" in result.summary, result.text()
+    assert PASSWORD not in result.text()

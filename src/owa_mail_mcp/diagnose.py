@@ -183,8 +183,16 @@ def diagnose(settings: Settings, ews_url: str) -> Diagnosis:
     anonymous = _probe(session, "EWS без входа", ews_url)
     signed_in = _probe(session, "EWS со входом", ews_url, method="POST", auth=_auth(settings), data=_SOAP_GET_FOLDER) if _auth(settings) else None
     owa = _probe(session, "OWA", base + "/owa/")
-    probes = [p for p in (anonymous, signed_in, owa) if p]
-    return Diagnosis(summary=explain(anonymous, signed_in, owa, settings), probes=probes)
+    warmed = None
+    if _auth(settings) and signed_in and signed_in.error:
+        # Sign in through OWA first, then EWS on the same (authenticated) connection.
+        fresh = _session(settings)
+        owa_signin = _probe(fresh, "Вход в OWA", base + "/owa/", auth=_auth(settings))
+        warmed = _probe(fresh, "EWS после входа в OWA", ews_url, method="POST", auth=_auth(settings), data=_SOAP_GET_FOLDER)
+        probes = [p for p in (anonymous, signed_in, owa, owa_signin, warmed) if p]
+    else:
+        probes = [p for p in (anonymous, signed_in, owa) if p]
+    return Diagnosis(summary=explain(anonymous, signed_in, owa, settings, warmed), probes=probes)
 
 
 def _looks_like_login(p: Probe) -> bool:
@@ -196,8 +204,21 @@ def _owa_alive(p: Probe) -> bool:
     return bool(p.exchange.get("X-OWA-Version") or "/owa/auth" in " ".join(p.redirects).lower() or (p.status in (200, 401) and not p.error))
 
 
-def explain(anonymous: Probe, signed_in: Probe | None, owa: Probe, settings: Settings) -> str:
+def explain(anonymous: Probe, signed_in: Probe | None, owa: Probe, settings: Settings, warmed: Probe | None = None) -> str:
     ews = signed_in or anonymous
+    if warmed is not None and ews.error:
+        if warmed.ews_version and warmed.status == 200:
+            return (f"EWS работает (Exchange {warmed.ews_version}), но только на соединении, которое сначала вошло в OWA: "
+                    "запросы к EWS на новом соединении сервер обрывает. Программа делает такой вход сама — "
+                    "обновите её и проверьте подключение ещё раз.")
+        if warmed.ews_version:
+            return f"После входа в OWA EWS отвечает (Exchange {warmed.ews_version}), но с ошибкой: {warmed.soap_fault or 'HTTP ' + str(warmed.status)}."
+        if warmed.status == 401:
+            return "После входа в OWA EWS просит войти снова и не принимает логин и пароль. Проверьте их; для входа Windows логин пишется как DOMAIN\\login."
+        if warmed.error:
+            return ("Сервер обрывает соединение на адресе EWS даже после входа в OWA: EWS закрыт для внешних подключений "
+                    "(веб-почта при этом работает). Спросите ИТ, можно ли открыть EWS для вашей учётной записи; "
+                    "иначе нужен режим работы через веб-почту.")
     if anonymous.error and owa.error:
         return "Сервер не отвечает ни на EWS, ни на OWA. Проверьте адрес и VPN."
     if signed_in and signed_in.ews_version:
