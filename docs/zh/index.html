@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OWA Mail MCP — 让 AI 智能体处理 Microsoft Exchange 邮件</title>
+<meta name="description" content="面向 Microsoft Exchange / OWA 邮箱的 MCP 服务器。AI 智能体（Claude Code、Claude Desktop、Codex、Cursor）可以查收邮件、搜索邮件、总结邮件往来和附件、查找联系人。邮件只有在用户确认后才会发出。一条命令即可安装。">
+<link rel="canonical" href="https://khomiakov7706.github.io/owa-mail-mcp/zh/">
+<link rel="alternate" hreflang="ru" href="https://khomiakov7706.github.io/owa-mail-mcp/">
+<link rel="alternate" hreflang="en" href="https://khomiakov7706.github.io/owa-mail-mcp/en/">
+<link rel="alternate" hreflang="zh" href="https://khomiakov7706.github.io/owa-mail-mcp/zh/">
+<link rel="alternate" hreflang="es" href="https://khomiakov7706.github.io/owa-mail-mcp/es/">
+<link rel="alternate" hreflang="x-default" href="https://khomiakov7706.github.io/owa-mail-mcp/">
+<link rel="alternate" type="text/markdown" href="https://khomiakov7706.github.io/owa-mail-mcp/en/index.md" title="本页的 Markdown 版本（英文）">
+<link rel="alternate" type="text/plain" href="https://khomiakov7706.github.io/owa-mail-mcp/llms.txt" title="llms.txt">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../img/icon-180.png">
+<meta name="theme-color" content="#07080b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../site.css">
+<script>
+  try { var t = localStorage.getItem('owa-mail-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+<meta property="og:title" content="OWA Mail MCP — 让 AI 智能体处理 Exchange 邮件">
+<meta property="og:description" content="智能体负责阅读、搜索和总结工作邮件，发不发由你决定。">
+<meta property="og:url" content="https://khomiakov7706.github.io/owa-mail-mcp/zh/">
+<meta property="og:image" content="https://khomiakov7706.github.io/owa-mail-mcp/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="zh_CN">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://khomiakov7706.github.io/owa-mail-mcp/zh/#app",
+      "name": "OWA Mail MCP",
+      "description": "面向 Microsoft Exchange / OWA 邮箱的 MCP 服务器：查收邮件、搜索、阅读邮件会话和附件、通讯录查询，经用户确认后发送邮件。",
+      "url": "https://khomiakov7706.github.io/owa-mail-mcp/zh/",
+      "inLanguage": "zh-CN",
+      "operatingSystem": "macOS, Linux, Windows",
+      "applicationCategory": "DeveloperApplication",
+      "softwareRequirements": "启用 EWS 的 Microsoft Exchange 2013–2019；MCP 客户端（Claude Code、Claude Desktop、Codex、Cursor）",
+      "installUrl": "https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh",
+      "codeRepository": "https://github.com/Khomiakov7706/owa-mail-mcp",
+      "license": "https://opensource.org/licenses/MIT",
+      "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+    },
+    {
+      "@type": "HowTo",
+      "name": "如何安装并接入 OWA Mail MCP",
+      "totalTime": "PT3M",
+      "step": [
+        {"@type": "HowToStep", "name": "安装", "text": "在终端中运行：curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh"},
+        {"@type": "HowToStep", "name": "连接邮箱", "text": "在弹出的设置窗口中填写网页邮箱地址、邮箱、登录名和密码，点击“检查连接”，然后“保存”。"},
+        {"@type": "HowToStep", "name": "接入智能体", "text": "在设置窗口中为你的客户端点击“添加”，或运行：claude mcp add --scope user owa-mail -- ~/.local/bin/owa-mail-mcp"}
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {"@type": "Question", "name": "安全吗？", "acceptedAnswer": {"@type": "Answer", "text": "就个人使用而言，设计是合理的：密码存放在系统钥匙串中，邮件须经用户确认才会发出。但尚未经过独立审计；智能体读取的邮件内容会发送给 AI 服务商，因此用于公司邮箱前需要获得信息安全部门的同意。"}},
+        {"@type": "Question", "name": "智能体能绕过我发送邮件吗？", "acceptedAnswer": {"@type": "Answer", "text": "不能。发送功能默认关闭，而且每封邮件都要在浏览器的确认窗口中确认，该窗口的地址只有用户的浏览器知道。"}},
+        {"@type": "Question", "name": "密码存放在哪里？", "acceptedAnswer": {"@type": "Answer", "text": "存放在系统钥匙串中（Keychain、Credential Manager、Secret Service）。服务器地址、邮箱和登录名保存在用户设置目录下的 config.json 中。程序更新不会改动它们。"}},
+        {"@type": "Question", "name": "需要 VPN 吗？", "acceptedAnswer": {"@type": "Answer", "text": "如果公司的网页邮箱只能在内网打开，那就需要。程序访问的是浏览器所访问的同一台服务器，也支持走系统代理。"}}
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#main">跳到正文</a>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="logo" href="./" aria-label="OWA Mail MCP — 返回首页">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset=".55" stop-color="#60a5fa"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#lg)"/><rect x="7" y="10" width="18" height="13" rx="3" fill="none" stroke="#fff" stroke-width="2"/><path d="M8.5 12 16 17.2 23.5 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      OWA Mail MCP
+    </a>
+    <nav aria-label="页面导航">
+      <a href="#features">功能</a>
+      <a href="#how">工作原理</a>
+      <a href="#install">安装</a>
+      <a href="#tools">工具</a>
+      <a href="#security">安全</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="right">
+      <details class="lang">
+        <summary aria-label="语言：中文"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg><span>ZH</span></summary>
+        <ul>
+          <li><a href="../" hreflang="ru" lang="ru" data-lang="ru">Русский</a></li>
+          <li><a href="../en/" hreflang="en" lang="en" data-lang="en">English</a></li>
+          <li><a href="./" hreflang="zh" lang="zh" data-lang="zh" aria-current="page">中文</a></li>
+          <li><a href="../es/" hreflang="es" lang="es" data-lang="es">Español</a></li>
+        </ul>
+      </details>
+      <button type="button" class="icon-btn theme" id="theme" aria-label="切换主题">
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg>
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/Khomiakov7706/owa-mail-mcp" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a>
+      <a class="btn btn-primary" href="#install">安装</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+<section class="hero" aria-labelledby="title">
+  <div class="wrap">
+    <a class="pill" href="#features"><b id="version">v0.3</b> 新功能：可读取附件和会议转录 →</a>
+    <h1 id="title">工作邮件 <span class="grad">交给你的 AI 智能体</span></h1>
+    <p class="sub">面向 Microsoft Exchange / OWA 的 MCP 服务器。智能体帮你查收件箱、搜邮件、总结邮件往来和附件。只有你点了“发送”，邮件才会发出。</p>
+    <div class="hero-cta">
+      <div class="cmd hero-cmd">
+        <span class="p" aria-hidden="true">$</span>
+        <code id="cmd-hero">curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh</code>
+        <button class="copy" type="button" data-copy="#cmd-hero"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>复制</button>
+      </div>
+    </div>
+    <div class="hero-cta" style="margin-top:14px">
+      <a class="btn btn-ghost" href="#agents">让智能体来安装</a>
+      <a class="btn btn-ghost" href="https://github.com/Khomiakov7706/owa-mail-mcp">GitHub 上的源代码</a>
+    </div>
+    <p class="works">支持 <span>Claude Code</span><span>Claude Desktop</span><span>Codex</span><span>Cursor</span><span>OpenCode</span><span>Kilo Code</span><span>任意 MCP 客户端</span></p>
+  </div>
+
+  <div class="stage">
+    <figure class="window" aria-label="会话示例：智能体整理邮件并起草回复">
+      <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>agent — ~/work</span></div>
+      <div class="term">
+        <div class="u">从昨晚到现在，哪些邮件需要我回复？</div>
+        <div class="call"><b>owa-mail</b> · get_status <span class="r">→ ivan.petrov@company.com</span></div>
+        <div class="call"><b>owa-mail</b> · check_mail <span class="r">→ 37 封邮件</span></div>
+        <div class="call"><b>owa-mail</b> · get_thread <span class="r">→ “Q4 预算”，41 封邮件</span></div>
+        <div class="ans">需要你回复的有 3 封：
+  1. 王芳 — Q4 预算，15:00 前给出估算 <em>（今天）</em>
+  2. 李娜 — 确认休假 <em>（周五）</em>
+  3. John Doe (外部) — 合同续签
+仅供知悉 9 封，邮件列表 25 封。</div>
+        <div class="gap"></div>
+        <div class="u">回复王芳，估算明天 12:00 前发给她</div>
+        <div class="call wait"><b>owa-mail</b> · send_email <span class="r">→ 等待你在浏览器中确认…</span></div>
+      </div>
+    </figure>
+    <figure class="float">
+      <img class="only-dark" src="../img/confirm-dark.png" width="1456" height="968" alt="发送确认窗口（俄语界面）：收件人（外部地址已高亮）、主题、正文，以及“发送”“修改”“不发送”按钮">
+      <img class="only-light" src="../img/confirm-light.png" width="1456" height="968" alt="发送确认窗口（俄语界面）">
+    </figure>
+    <span class="float-tag">确认窗口 · 你的浏览器</span>
+  </div>
+
+  <div class="wrap">
+    <dl class="stats">
+      <div><dt><b>9</b></dt><dd><span>个智能体工具</span></dd></div>
+      <div><dt><b>0</b></dt><dd><span>封未经你“发送”的邮件</span></dd></div>
+      <div><dt><b>1</b></dt><dd><span>条命令完成安装</span></dd></div>
+      <div><dt><b>MIT</b></dt><dd><span>开源，免费</span></dd></div>
+    </dl>
+  </div>
+</section>
+
+<section id="features" aria-labelledby="features-title">
+  <div class="wrap">
+    <p class="eyebrow">功能</p>
+    <h2 id="features-title">邮箱里的日常操作，<span class="grad">一句话搞定</span></h2>
+    <p class="section-sub">智能体看到的邮箱和你在网页邮箱里看到的一样，它会自己决定打开哪封邮件、汇总哪个会话、读取附件中的哪些内容。</p>
+
+    <div class="bento">
+      <article class="card c2">
+        <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/></svg></div>
+        <h3>收件箱分拣</h3>
+        <p>任意时间段内的新邮件，自动分成“需要回复”“仅供知悉”和“可以不看”。</p>
+        <div class="tools"><code>check_mail</code><code>triage_inbox</code></div>
+      </article>
+      <article class="card c2">
+        <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg></div>
+        <h3>去掉引用的邮件会话</h3>
+        <p>“收件箱”和“已发送”中的整个会话按时间排列，没有层层“发件人：… 发送时间：…”。谁提了什么、等你做什么，一目了然。</p>
+        <div class="tools"><code>get_thread</code><code>summarize_thread</code></div>
+      </article>
+      <article class="card c2">
+        <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1 12.2 20.3a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg></div>
+        <h3>附件与会议转录</h3>
+        <p>提取 .docx、PDF、.txt、.md、.csv、HTML 以及 .vtt/.srt 字幕中的文本，保留“王芳：…”这样的发言人。</p>
+        <div class="tools"><code>get_attachment</code></div>
+      </article>
+      <article class="card c3">
+        <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></div>
+        <h3>跨文件夹搜索</h3>
+        <p>按正文、发件人、收件人、主题、日期和附件搜索。日期写法很自然：<code>yesterday</code>、<code>7d</code>、<code>2026-10-01</code>。</p>
+        <div class="mini" aria-label="调用示例"><span class="k">search_messages</span>(sender=<span class="t">"Anna"</span>, text=<span class="t">"budget"</span>, since=<span class="t">"30d"</span>)<br>→ 6 封邮件，最新的在前</div>
+        <div class="tools"><code>search_messages</code><code>get_message</code></div>
+      </article>
+      <article class="card c3">
+        <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></div>
+        <h3>联系人与发件人</h3>
+        <p>公司通讯录：姓名、准确地址、职位、部门。还能看到本周谁给你发信最多，以及各有多少未读。</p>
+        <div class="mini"><span class="k">list_senders</span>(since=<span class="t">"7d"</span>)<br>→ 王芳 · 12 封邮件 · <span class="w">3 封未读</span></div>
+        <div class="tools"><code>find_people</code><code>list_senders</code></div>
+      </article>
+      <article class="card c6 feature">
+        <div>
+          <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <h3>发送邮件，必须你点头</h3>
+          <p>智能体可以起草新邮件或在会话中回复，但无法自行发送。浏览器会弹出确认窗口。</p>
+          <ul class="checks">
+            <li><b>发送</b>、<b>修改</b>还是<b>不发送</b>，由你决定</li>
+            <li>外部地址会高亮显示，密送会给出提醒</li>
+            <li>窗口地址只有你的浏览器知道：邮件里的文字无法诱导智能体去点按钮</li>
+            <li>50 秒内没有回应，邮件就不会发出；重试也不会重复发送</li>
+            <li>在你手动开启之前，发送功能始终关闭</li>
+          </ul>
+          <div class="tools"><code>send_email</code></div>
+        </div>
+        <figure>
+          <img class="only-dark" src="../img/confirm-dark.png" width="1456" height="968" alt="发送确认窗口（俄语界面）" loading="lazy">
+          <img class="only-light" src="../img/confirm-light.png" width="1456" height="968" alt="发送确认窗口（俄语界面）" loading="lazy">
+        </figure>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="how" aria-labelledby="how-title">
+  <div class="wrap">
+    <p class="eyebrow">工作原理</p>
+    <h2 id="how-title">三分钟 <span class="grad">从安装到第一次回答</span></h2>
+    <ol class="steps">
+      <li class="step">
+        <h3>一条命令完成安装</h3>
+        <p>安装程序会把所需的 Python 装到独立目录，不碰系统自带的 Python。更新也是同一条命令，设置会保留。</p>
+        <div class="mini">$ curl -LsSf …/install.sh | sh<br><span class="t">==&gt; 完成：owa-mail-mcp 0.3</span></div>
+      </li>
+      <li class="step">
+        <h3>连接邮箱</h3>
+        <p>在设置窗口中填写与网页邮箱相同的信息。点击“检查连接”，会显示你的姓名和最近的邮件。</p>
+        <figure>
+          <img class="only-dark" src="../img/setup-account-dark.png" width="1456" height="1306" alt="设置窗口（俄语界面）：服务器地址、邮箱、登录名、密码，以及检查成功的结果" loading="lazy">
+          <img class="only-light" src="../img/setup-account-light.png" width="1456" height="1306" alt="邮箱设置窗口（俄语界面）" loading="lazy">
+        </figure>
+      </li>
+      <li class="step">
+        <h3>向智能体提问</h3>
+        <p>“添加”按钮会把服务器写入 Claude Code、Codex、Claude Desktop 或 Cursor 的配置。之后直接问：“邮箱里有什么新消息？”</p>
+        <div class="mini"><span class="k">› 从昨天到现在邮箱里有什么新邮件？</span><br><span class="t">⏺</span> owa-mail · check_mail → 12 封邮件</div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section id="install" aria-labelledby="install-title">
+  <div class="wrap">
+    <p class="eyebrow">安装</p>
+    <h2 id="install-title">安装与接入</h2>
+    <p class="section-sub">需要能访问邮件服务器：如果网页邮箱只能通过 VPN 打开，请先连上 VPN。程序的设置窗口和确认窗口为俄语界面。</p>
+
+    <div class="panel-box" data-tabs>
+      <div class="tabs" role="tablist" aria-label="安装方式">
+        <button role="tab" id="t-unix" aria-controls="p-unix" aria-selected="true">macOS 和 Linux</button>
+        <button role="tab" id="t-win" aria-controls="p-win" aria-selected="false" tabindex="-1">Windows</button>
+        <button role="tab" id="t-agent" aria-controls="p-agent" aria-selected="false" tabindex="-1">通过智能体</button>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-unix" aria-labelledby="t-unix">
+        <p>粘贴到“终端”中运行。大约一分钟后会打开设置窗口。</p>
+        <div class="code"><pre id="c-unix">curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh</pre><button class="copy" type="button" data-copy="#c-unix">复制</button></div>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-win" aria-labelledby="t-win">
+        <p>在 PowerShell 中运行：</p>
+        <div class="code"><pre id="c-win">powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+uv tool install --python 3.12 git+https://github.com/Khomiakov7706/owa-mail-mcp
+owa-mail-mcp setup</pre><button class="copy" type="button" data-copy="#c-win">复制</button></div>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-agent" aria-labelledby="t-agent">
+        <p id="agents">复制下面的文本发给你的智能体（Claude Code、Codex、Cursor），它会自己完成安装和接入。智能体不需要你的密码：密码由你在设置窗口中填写。</p>
+        <div class="code"><pre class="wrap-text" id="c-agent">为我的 Exchange 工作邮箱安装并接入 OWA Mail MCP 服务器。
+1. 运行：curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh
+2. 将服务器接入你自己（即当前智能体）。Claude Code 的命令：claude mcp add --scope user owa-mail -- ~/.local/bin/owa-mail-mcp
+3. 邮箱（服务器地址、登录名、密码）我会在弹出的窗口中自己配置，不要向我索要密码。
+4. 完成后调用 get_status 并展示结果。
+智能体说明：https://khomiakov7706.github.io/owa-mail-mcp/llms.txt</pre><button class="copy" type="button" data-copy="#c-agent">复制</button></div>
+      </div>
+    </div>
+
+    <div class="panel-box" data-tabs>
+      <div class="tabs" role="tablist" aria-label="接入客户端">
+        <button role="tab" id="t-cc" aria-controls="p-cc" aria-selected="true">Claude Code</button>
+        <button role="tab" id="t-cd" aria-controls="p-cd" aria-selected="false" tabindex="-1">Claude Desktop</button>
+        <button role="tab" id="t-cx" aria-controls="p-cx" aria-selected="false" tabindex="-1">Codex</button>
+        <button role="tab" id="t-cu" aria-controls="p-cu" aria-selected="false" tabindex="-1">Cursor</button>
+        <button role="tab" id="t-oc" aria-controls="p-oc" aria-selected="false" tabindex="-1">OpenCode</button>
+        <button role="tab" id="t-kc" aria-controls="p-kc" aria-selected="false" tabindex="-1">Kilo Code</button>
+        <button role="tab" id="t-any" aria-controls="p-any" aria-selected="false" tabindex="-1">其他客户端</button>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-cc" aria-labelledby="t-cc">
+        <p>最简单的方法是点击设置窗口（<code>owa-mail-mcp setup</code>）中的“添加”按钮。也可以在终端中运行：</p>
+        <div class="code"><pre id="c-cc">claude mcp add --scope user owa-mail -- ~/.local/bin/owa-mail-mcp</pre><button class="copy" type="button" data-copy="#c-cc">复制</button></div>
+        <p>验证：运行 <code>claude mcp list</code>，或在会话中输入 <code>/mcp</code>。</p>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-cd" aria-labelledby="t-cd">
+        <p>打开 Settings → Developer → Edit Config，然后重启 Claude Desktop。设置窗口会自动填入准确路径。</p>
+        <div class="code"><pre id="c-cd">{
+  "mcpServers": {
+    "owa-mail": { "command": "/Users/YOU/.local/bin/owa-mail-mcp" }
+  }
+}</pre><button class="copy" type="button" data-copy="#c-cd">复制</button></div>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-cx" aria-labelledby="t-cx">
+        <div class="code"><pre id="c-cx">codex mcp add owa-mail -- ~/.local/bin/owa-mail-mcp</pre><button class="copy" type="button" data-copy="#c-cx">复制</button></div>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-cu" aria-labelledby="t-cu">
+        <p>文件 <code>~/.cursor/mcp.json</code>：</p>
+        <div class="code"><pre id="c-cu">{
+  "mcpServers": {
+    "owa-mail": { "command": "/Users/YOU/.local/bin/owa-mail-mcp" }
+  }
+}</pre><button class="copy" type="button" data-copy="#c-cu">复制</button></div>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-oc" aria-labelledby="t-oc">
+        <p>文件 <code>~/.config/opencode/opencode.json</code>（仅用于单个项目时，放在项目根目录的 <code>opencode.json</code>）。OpenCode 有自己的格式：使用 <code>mcp</code> 键、<code>"type": "local"</code>，命令写成数组。OpenCode 不读取 <code>mcpServers</code> 键。设置窗口中的“添加”按钮会自动写好这些内容。</p>
+        <div class="code"><pre id="c-oc">{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "owa-mail": {
+      "type": "local",
+      "command": ["/Users/YOU/.local/bin/owa-mail-mcp"],
+      "enabled": true
+    }
+  }
+}</pre><button class="copy" type="button" data-copy="#c-oc">复制</button></div>
+        <p>重启 OpenCode。验证：<code>opencode mcp list</code>。</p>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-kc" aria-labelledby="t-kc">
+        <p>新版 Kilo Code 与 OpenCode 格式相同，文件为 <code>~/.config/kilo/kilo.jsonc</code>（项目级为 <code>kilo.jsonc</code> 或 <code>.kilo/kilo.jsonc</code>）：</p>
+        <div class="code"><pre id="c-kc">{
+  "mcp": {
+    "owa-mail": {
+      "type": "local",
+      "command": ["/Users/YOU/.local/bin/owa-mail-mcp"],
+      "enabled": true
+    }
+  }
+}</pre><button class="copy" type="button" data-copy="#c-kc">复制</button></div>
+        <p>旧版扩展：Kilo Code → MCP Servers → “Edit Global MCP”（文件 <code>mcp_settings.json</code>；项目级为 <code>.kilocode/mcp.json</code>）：</p>
+        <div class="code"><pre id="c-kl">{
+  "mcpServers": {
+    "owa-mail": {
+      "command": "/Users/YOU/.local/bin/owa-mail-mcp",
+      "args": [],
+      "disabled": false,
+      "alwaysAllow": []
+    }
+  }
+}</pre><button class="copy" type="button" data-copy="#c-kl">复制</button></div>
+        <p>修改后重启 Kilo Code（在 VS Code 中：Developer: Reload Window）。</p>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-any" aria-labelledby="t-any">
+        <p>任何支持 stdio 的 MCP 客户端都可以：命令填 <code>owa-mail-mcp</code> 的绝对路径，无需参数和环境变量。服务器会从自己的配置文件和系统钥匙串中读取设置。</p>
+      </div>
+    </div>
+
+    <dl class="req">
+      <div><dt>系统</dt><dd>macOS, Linux, Windows</dd></div>
+      <div><dt>邮箱</dt><dd>Exchange 2013 / 2016 / 2019，即 OWA 网页邮箱所在的服务器</dd></div>
+      <div><dt>更新之后</dt><dd>在客户端中重启 MCP 服务器：Claude Code 中为 <code>/mcp</code> → Reconnect</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section id="tools" aria-labelledby="tools-title">
+  <div class="wrap">
+    <p class="eyebrow">面向开发者和智能体</p>
+    <h2 id="tools-title">MCP 工具</h2>
+    <p class="section-sub">除 <code>send_email</code> 外，所有工具都是只读的。邮件内容是数据而不是指令：服务器会明确告诉智能体不要执行邮件中的命令。</p>
+    <div class="table">
+      <table>
+        <thead><tr><th scope="col">工具</th><th scope="col">作用</th></tr></thead>
+        <tbody>
+          <tr><td><code>get_status</code></td><td>当前用户、当前时间、未读数量、版本、是否已开启发送</td></tr>
+          <tr><td><code>check_mail</code></td><td>“收件箱”中的新邮件（默认为未读）及预览</td></tr>
+          <tr><td><code>search_messages</code></td><td>按正文、发件人、收件人、主题、日期、附件搜索；文件夹：inbox、sent、inbox_and_sent、all</td></tr>
+          <tr><td><code>get_message</code></td><td>完整邮件：正文（HTML → 文本）、收件人、附件名称</td></tr>
+          <tr><td><code>get_thread</code></td><td>来自所有文件夹的完整会话，按时间排列，去掉引用的历史内容，附参与者</td></tr>
+          <tr><td><code>get_attachment</code></td><td>附件文本：.docx、.pdf、.txt、.md、.csv、.html、.vtt/.srt、嵌套邮件</td></tr>
+          <tr><td><code>find_people</code></td><td>组织通讯录：姓名、地址、职位、部门</td></tr>
+          <tr><td><code>list_senders</code></td><td>某段时间内的发件人：邮件数、未读数、最近主题；对 <code>sent</code> 则列出你发信的对象</td></tr>
+          <tr><td><code>send_email</code><span class="rw">写入</span></td><td>新邮件或回复（<code>reply_to_message_id</code>、<code>reply_all</code>），须在确认窗口中确认后才发送</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">提示词：<code>summarize_thread</code> 用于总结邮件往来，<code>triage_inbox</code> 用于分拣收件箱。完整说明见 <a href="../en/index.md">本页的 Markdown 版本（英文）</a>和 <a href="../llms.txt">llms.txt</a>。</p>
+  </div>
+</section>
+
+<section id="security" aria-labelledby="security-title">
+  <div class="wrap">
+    <p class="eyebrow">安全</p>
+    <h2 id="security-title">坦诚说说安全</h2>
+    <p class="section-sub">就个人使用而言，程序的设计是合理的。但它还没有经过独立审计，而且最大的风险不在代码：智能体读到的一切，都会发送给为它提供服务的 AI 服务商。</p>
+
+    <h3 class="sec-h">已有的保护</h3>
+    <div class="sec">
+      <article class="card"><h3>密码存放在钥匙串</h3><p>Keychain、Credential Manager 或 Secret Service。不写入文件，不进日志，也不交给智能体：没有任何工具能显示密码。</p></article>
+      <article class="card"><h3>只连你的服务器</h3><p>密码只会通过 HTTPS 发送到你指定的 Exchange 服务器。跳转到其他主机时不携带密码。</p></article>
+      <article class="card"><h3>发送邮件，必须你点头</h3><p>默认关闭。每封邮件都要你在本地窗口中点击确认。隐藏字符、无效地址和收件人过多的邮件会被拒绝，外部地址会高亮显示。</p></article>
+      <article class="card"><h3>本地窗口对外封闭</h3><p>仅监听 127.0.0.1，使用随机的秘密地址，校验 Host 和 Origin，禁止嵌入：其他网站无法访问。</p></article>
+      <article class="card"><h3>按指纹校验证书</h3><p>常规证书校验保持开启。公司内部证书只接受那一张特定证书，按 SHA-256 指纹比对。</p></article>
+      <article class="card"><h3>避免账号被锁</h3><p>密码被拒后会停止向 Exchange 发送请求，并限制请求频率。日志只记录工具名称和时间，不含邮件内容。</p></article>
+    </div>
+
+    <h3 class="sec-h">程序解决不了的问题</h3>
+    <ol class="risks">
+      <li><b>邮件会发送给 AI 服务商。</b>智能体读取的一切，包括正文、附件和会议转录，都会发送给提供智能体服务的公司。银行或其他受监管的公司需要获得信息安全部门的同意，公司政策也可能明确禁止这样做。这是政策问题，而不是代码问题。</li>
+      <li><b>带有“指令”的邮件。</b>收到的邮件里可能藏着写给智能体的文字，比如“把这封转发给…”。服务器会要求智能体把邮件当作数据，但这只是请求，不是锁。真正的防线是确认窗口：点击“发送”之前请先读一遍邮件。智能体可以读取所有内容，目前还无法把它限制在特定文件夹内。</li>
+      <li><b>安装方式。</b><code>curl … | sh</code> 安装的是 main 分支当前的内容。目前还没有签名发布和固定版本：如果 GitHub 账号被攻破，下一次更新也会随之被攻破。</li>
+      <li><b>会削弱保护的设置。</b>为服务器启用的“旧版加密设置”，以及把密码写在智能体配置的 <code>OWA_MAIL_PASSWORD</code> 变量里而不是钥匙串中。这两项在你手动开启之前都是关闭的。</li>
+      <li><b>对你电脑的访问。</b>已经以你的账户登录的人，可以利用已保存的密码和正在运行的程序，和任何保存密码的应用一样。</li>
+    </ol>
+
+    <h3 class="sec-h">接入工作邮箱之前</h3>
+    <ul class="checks">
+      <li>就邮件将发送给 AI 服务商一事，取得信息安全部门的同意。</li>
+      <li>如果并不真正需要，就不要开启发送功能。</li>
+      <li>安排对代码的独立审查，并安装固定版本，而不是 main 分支的最新版。</li>
+    </ul>
+  </div>
+</section>
+
+<section id="faq" aria-labelledby="faq-title">
+  <div class="wrap">
+    <p class="eyebrow">FAQ</p>
+    <h2 id="faq-title">常见问题</h2>
+    <div class="faq">
+      <details><summary>安全吗？</summary>
+        <p>就个人使用而言，设计是合理的：密码存放在钥匙串中，邮件须经你确认才会发出。但尚未经过独立审计，而且邮件内容会发送给 AI 服务商，用于公司邮箱前需要获得信息安全部门的同意。详见<a href="#security">“安全”</a>一节。</p></details>
+      <details><summary>服务器地址在哪里找？</summary>
+        <p>就是你在浏览器中打开工作邮箱的地址：<code>mail.company.com</code>、<code>https://owa.company.com</code> 或 <code>https://outlook.company.com/owa</code>。哪种写法都可以。</p></details>
+      <details><summary>提示“服务器不可用”，但网页邮箱能打开</summary>
+        <p>设置窗口会给出原因：DNS——重新连接 VPN；连接——浏览器很可能走了代理（可在“高级”→“代理”中填写代理地址）；TLS——服务器版本较旧，窗口会提示仅对该服务器允许旧版加密设置。</p></details>
+      <details><summary>提示“服务器的响应不像 EWS”</summary>
+        <p>EWS 地址前面有一个带网页登录的网关。程序会先通过 OWA 登录，再在同一连接上继续，通常这样就够了。如果仍然不行，在设置窗口中点击“复制诊断信息”（不含密码），发给 IT 部门或提交到 issues。</p></details>
+      <details><summary>登录名和密码存在哪里？更新后还在吗？</summary>
+        <p>密码在系统钥匙串中，其余信息在用户目录下的 <code>config.json</code> 中（Mac 上为 <code>~/Library/Application Support/owa-mail-mcp</code>）。更新不会改动它们。查看：<code>owa-mail-mcp status</code>。</p></details>
+      <details><summary>更新后错误依旧</summary>
+        <p>客户端仍在运行旧代码的进程。请重启 MCP 服务器：Claude Code 中为 <code>/mcp</code> → owa-mail → Reconnect；Claude Desktop 和 Cursor 需关闭后重新打开应用。</p></details>
+      <details><summary>怎么确认一切正常？</summary>
+        <p>对智能体说“检查一下邮箱状态”，<code>get_status</code> 会返回你的地址、未读数量和版本。调用日志在设置窗口底部。</p></details>
+      <details><summary>智能体能绕过我发送邮件吗？</summary>
+        <p>不能。发送功能默认关闭，而且每封邮件都要经过确认窗口，该窗口的地址只有你的浏览器知道。50 秒内没有回应，邮件就不会发出。</p></details>
+      <details><summary>支持 Exchange Online (Microsoft 365) 吗？</summary>
+        <p>本服务器面向通过 EWS 访问的企业内部 Exchange 2013–2019。Microsoft 365 已禁用 EWS 的密码登录，云端邮箱更适合使用基于 Microsoft Graph 的服务器。</p></details>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <section class="band" aria-labelledby="cta-title">
+    <h2 id="cta-title">收件箱：0。<span class="grad">祝你晚上愉快。</span></h2>
+    <p class="section-sub">一条命令，智能体就能和你一起处理工作邮件。</p>
+    <div class="cmd">
+      <span class="p" aria-hidden="true">$</span>
+      <code id="cmd-cta">curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh</code>
+      <button class="copy" type="button" data-copy="#cmd-cta">复制</button>
+    </div>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="grow">OWA Mail MCP · MIT</span>
+    <a href="https://github.com/Khomiakov7706/owa-mail-mcp">GitHub</a>
+    <a href="https://github.com/Khomiakov7706/owa-mail-mcp/issues">报告问题</a>
+    <a href="../en/index.md">Markdown（英文）</a>
+    <a href="../llms.txt">llms.txt</a>
+    <a href="https://modelcontextprotocol.io/">什么是 MCP</a>
+  </div>
+</footer>
+
+<script src="../site.js"></script>
+</body>
+</html>

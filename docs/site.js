@@ -1,11 +1,17 @@
 (function () {
   var root = document.documentElement;
+  var T = {
+    ru: {light: 'Светлая тема', dark: 'Тёмная тема', copied: 'Скопировано'},
+    en: {light: 'Light theme', dark: 'Dark theme', copied: 'Copied'},
+    zh: {light: '浅色主题', dark: '深色主题', copied: '已复制'},
+    es: {light: 'Tema claro', dark: 'Tema oscuro', copied: 'Copiado'}
+  }[(root.lang || 'ru').slice(0, 2)] || {};
 
   // Theme: dark by default, follows the system until the visitor picks one.
   var button = document.getElementById('theme');
   var light = window.matchMedia('(prefers-color-scheme: light)');
   function current() { return root.dataset.theme || (light.matches ? 'light' : 'dark'); }
-  function label() { button.title = current() === 'dark' ? 'Светлая тема' : 'Тёмная тема'; }
+  function label() { button.title = current() === 'dark' ? T.light : T.dark; }
   button.addEventListener('click', function () {
     var next = current() === 'dark' ? 'light' : 'dark';
     root.dataset.theme = next;
@@ -21,7 +27,7 @@
       var el = document.querySelector(b.dataset.copy);
       if (!el || !navigator.clipboard) return;
       navigator.clipboard.writeText(el.textContent.trim()).then(function () {
-        b.textContent = 'Скопировано';
+        b.textContent = T.copied;
         b.classList.add('done');
         setTimeout(function () { b.innerHTML = html; b.classList.remove('done'); }, 1600);
       }, function () {});
@@ -58,6 +64,18 @@
     var t = document.getElementById('t-agent');
     if (t) t.click();
   });
+
+  // Language switcher: remember the choice so the root page stops guessing; close on outside click or Escape.
+  document.querySelectorAll('[data-lang]').forEach(function (a) {
+    a.addEventListener('click', function () {
+      try { localStorage.setItem('owa-mail-lang', a.dataset.lang); } catch (e) {}
+    });
+  });
+  var lang = document.querySelector('details.lang');
+  if (lang) {
+    document.addEventListener('click', function (e) { if (!lang.contains(e.target)) lang.open = false; });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && lang.open) { lang.open = false; lang.querySelector('summary').focus(); } });
+  }
 
   // Current version from the repository; the static label stays if the request fails.
   fetch('https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/src/owa_mail_mcp/__init__.py')

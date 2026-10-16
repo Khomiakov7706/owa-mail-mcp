@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OWA Mail MCP — Microsoft Exchange mail for your AI agent</title>
+<meta name="description" content="An MCP server for Microsoft Exchange / OWA mail. Your AI agent (Claude Code, Claude Desktop, Codex, Cursor) checks mail, searches messages, summarizes threads and attachments, and finds people. Nothing is sent until you confirm. One-command install.">
+<link rel="canonical" href="https://khomiakov7706.github.io/owa-mail-mcp/en/">
+<link rel="alternate" hreflang="ru" href="https://khomiakov7706.github.io/owa-mail-mcp/">
+<link rel="alternate" hreflang="en" href="https://khomiakov7706.github.io/owa-mail-mcp/en/">
+<link rel="alternate" hreflang="zh" href="https://khomiakov7706.github.io/owa-mail-mcp/zh/">
+<link rel="alternate" hreflang="es" href="https://khomiakov7706.github.io/owa-mail-mcp/es/">
+<link rel="alternate" hreflang="x-default" href="https://khomiakov7706.github.io/owa-mail-mcp/">
+<link rel="alternate" type="text/markdown" href="https://khomiakov7706.github.io/owa-mail-mcp/en/index.md" title="This page in Markdown">
+<link rel="alternate" type="text/plain" href="https://khomiakov7706.github.io/owa-mail-mcp/llms.txt" title="llms.txt">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../img/icon-180.png">
+<meta name="theme-color" content="#07080b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../site.css">
+<script>
+  try { var t = localStorage.getItem('owa-mail-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+<meta property="og:title" content="OWA Mail MCP — Exchange mail for your AI agent">
+<meta property="og:description" content="Your agent reads, searches and summarizes your work mail. You decide what gets sent.">
+<meta property="og:url" content="https://khomiakov7706.github.io/owa-mail-mcp/en/">
+<meta property="og:image" content="https://khomiakov7706.github.io/owa-mail-mcp/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://khomiakov7706.github.io/owa-mail-mcp/en/#app",
+      "name": "OWA Mail MCP",
+      "description": "An MCP server for Microsoft Exchange / OWA mail: check mail, search, read threads and attachments, look up the address book, and send mail after the user confirms.",
+      "url": "https://khomiakov7706.github.io/owa-mail-mcp/en/",
+      "inLanguage": "en",
+      "operatingSystem": "macOS, Linux, Windows",
+      "applicationCategory": "DeveloperApplication",
+      "softwareRequirements": "Microsoft Exchange 2013–2019 with EWS; an MCP client (Claude Code, Claude Desktop, Codex, Cursor)",
+      "installUrl": "https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh",
+      "codeRepository": "https://github.com/Khomiakov7706/owa-mail-mcp",
+      "license": "https://opensource.org/licenses/MIT",
+      "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+    },
+    {
+      "@type": "HowTo",
+      "name": "How to install and connect OWA Mail MCP",
+      "totalTime": "PT3M",
+      "step": [
+        {"@type": "HowToStep", "name": "Install", "text": "Run in a terminal: curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh"},
+        {"@type": "HowToStep", "name": "Connect your mailbox", "text": "In the setup window that opens, enter your web mail address, email, login and password, then click Test connection and Save."},
+        {"@type": "HowToStep", "name": "Connect your agent", "text": "In the setup window, click Add for your client, or run: claude mcp add --scope user owa-mail -- ~/.local/bin/owa-mail-mcp"}
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {"@type": "Question", "name": "Is it safe?", "acceptedAnswer": {"@type": "Answer", "text": "For personal use, the design is sound: the password lives in the system keychain, and nothing is sent until the user confirms. There has been no independent audit, and the mail the agent reads goes to an AI service, so corporate mail needs sign-off from your security team."}},
+        {"@type": "Question", "name": "Can the agent send mail without me?", "acceptedAnswer": {"@type": "Answer", "text": "No. Sending is off by default, and every message is confirmed in a browser window whose address only the user's browser knows."}},
+        {"@type": "Question", "name": "Where is the password stored?", "acceptedAnswer": {"@type": "Answer", "text": "In the system keychain (Keychain, Credential Manager, Secret Service). The server address, email and login are in config.json in the user's settings folder. Updates don't touch them."}},
+        {"@type": "Question", "name": "Do I need a VPN?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, if your company's web mail only opens on the corporate network. The program talks to the same server as your browser, including through the system proxy."}}
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="logo" href="./" aria-label="OWA Mail MCP — home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset=".55" stop-color="#60a5fa"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#lg)"/><rect x="7" y="10" width="18" height="13" rx="3" fill="none" stroke="#fff" stroke-width="2"/><path d="M8.5 12 16 17.2 23.5 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      OWA Mail MCP
+    </a>
+    <nav aria-label="Sections">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#install">Install</a>
+      <a href="#tools">Tools</a>
+      <a href="#security">Security</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="right">
+      <details class="lang">
+        <summary aria-label="Language: English"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg><span>EN</span></summary>
+        <ul>
+          <li><a href="../" hreflang="ru" lang="ru" data-lang="ru">Русский</a></li>
+          <li><a href="./" hreflang="en" lang="en" data-lang="en" aria-current="page">English</a></li>
+          <li><a href="../zh/" hreflang="zh" lang="zh" data-lang="zh">中文</a></li>
+          <li><a href="../es/" hreflang="es" lang="es" data-lang="es">Español</a></li>
+        </ul>
+      </details>
+      <button type="button" class="icon-btn theme" id="theme" aria-label="Toggle theme">
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg>
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/Khomiakov7706/owa-mail-mcp" aria-label="GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a>
+      <a class="btn btn-primary" href="#install">Install</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+<section class="hero" aria-labelledby="title">
+  <div class="wrap">
+    <a class="pill" href="#features"><b id="version">v0.3</b> New: reads attachments and transcripts →</a>
+    <h1 id="title">Work email <span class="grad">for your AI agent</span></h1>
+    <p class="sub">An MCP server for Microsoft Exchange / OWA. Your agent checks your inbox, searches mail, and summarizes threads and attachments. Nothing goes out until you click Send.</p>
+    <div class="hero-cta">
+      <div class="cmd hero-cmd">
+        <span class="p" aria-hidden="true">$</span>
+        <code id="cmd-hero">curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh</code>
+        <button class="copy" type="button" data-copy="#cmd-hero"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy</button>
+      </div>
+    </div>
+    <div class="hero-cta" style="margin-top:14px">
+      <a class="btn btn-ghost" href="#agents">Install through your agent</a>
+      <a class="btn btn-ghost" href="https://github.com/Khomiakov7706/owa-mail-mcp">Source code on GitHub</a>
+    </div>
+    <p class="works">Works with <span>Claude Code</span><span>Claude Desktop</span><span>Codex</span><span>Cursor</span><span>OpenCode</span><span>Kilo Code</span><span>any MCP client</span></p>
+  </div>
+
+  <div class="stage">
+    <figure class="window" aria-label="Sample session: the agent triages mail and drafts a reply">
+      <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>agent — ~/work</span></div>
+      <div class="term">
+        <div class="u">what needs my reply since last night?</div>
+        <div class="call"><b>owa-mail</b> · get_status <span class="r">→ ivan.petrov@company.com</span></div>
+        <div class="call"><b>owa-mail</b> · check_mail <span class="r">→ 37 messages</span></div>
+        <div class="call"><b>owa-mail</b> · get_thread <span class="r">→ “Q4 budget”, 41 messages</span></div>
+        <div class="ans">Needs your reply — 3:
+  1. Anna Smith — Q4 budget, estimate due by 3:00 PM <em>(today)</em>
+  2. Maria Ivanova — approve time off <em>(Friday)</em>
+  3. John Doe (external) — contract renewal
+FYI — 9, newsletters — 25.</div>
+        <div class="gap"></div>
+        <div class="u">tell Anna I'll send the estimate tomorrow by noon</div>
+        <div class="call wait"><b>owa-mail</b> · send_email <span class="r">→ waiting for your confirmation in the browser…</span></div>
+      </div>
+    </figure>
+    <figure class="float">
+      <img class="only-dark" src="../img/confirm-dark.png" width="1456" height="968" alt="Send confirmation window (interface in Russian): recipients with the external one highlighted, subject, body, and Send, Edit, Don't send buttons">
+      <img class="only-light" src="../img/confirm-light.png" width="1456" height="968" alt="Send confirmation window (interface in Russian)">
+    </figure>
+    <span class="float-tag">confirmation window · your browser</span>
+  </div>
+
+  <div class="wrap">
+    <dl class="stats">
+      <div><dt><b>9</b></dt><dd><span>tools for your agent</span></dd></div>
+      <div><dt><b>0</b></dt><dd><span>messages sent without your OK</span></dd></div>
+      <div><dt><b>1</b></dt><dd><span>command to install</span></dd></div>
+      <div><dt><b>MIT</b></dt><dd><span>open source, free</span></dd></div>
+    </dl>
+  </div>
+</section>
+
+<section id="features" aria-labelledby="features-title">
+  <div class="wrap">
+    <p class="eyebrow">Features</p>
+    <h2 id="features-title">Everything you do in email, <span class="grad">in one question</span></h2>
+    <p class="section-sub">The agent sees your mailbox the way you do in web mail. It decides which message to open, which thread to pull together, and what to read in an attachment.</p>
+
+    <div class="bento">
+      <article class="card c2">
+        <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/></svg></div>
+        <h3>Inbox triage</h3>
+        <p>New mail for any period, sorted into “reply”, “FYI” and “safe to skip”.</p>
+        <div class="tools"><code>check_mail</code><code>triage_inbox</code></div>
+      </article>
+      <article class="card c2">
+        <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg></div>
+        <h3>Threads without the quotes</h3>
+        <p>The whole conversation from Inbox and Sent, in order, without the “From: … Sent: …” clutter. Who proposed what, and what’s expected of you.</p>
+        <div class="tools"><code>get_thread</code><code>summarize_thread</code></div>
+      </article>
+      <article class="card c2">
+        <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1 12.2 20.3a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg></div>
+        <h3>Attachments and transcripts</h3>
+        <p>Text from .docx, PDF, .txt, .md, .csv, HTML, and .vtt/.srt subtitles — with speaker lines like “Anna: …”.</p>
+        <div class="tools"><code>get_attachment</code></div>
+      </article>
+      <article class="card c3">
+        <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></div>
+        <h3>Search across all folders</h3>
+        <p>By text, sender, recipient, subject, date and attachments. Dates the way people write them: <code>yesterday</code>, <code>7d</code>, <code>2026-10-01</code>.</p>
+        <div class="mini" aria-label="Sample call"><span class="k">search_messages</span>(sender=<span class="t">"Anna"</span>, text=<span class="t">"budget"</span>, since=<span class="t">"30d"</span>)<br>→ 6 messages, newest first</div>
+        <div class="tools"><code>search_messages</code><code>get_message</code></div>
+      </article>
+      <article class="card c3">
+        <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></div>
+        <h3>People and senders</h3>
+        <p>Your company address book: name, exact address, title, department. Plus who wrote to you most this week, with unread counts.</p>
+        <div class="mini"><span class="k">list_senders</span>(since=<span class="t">"7d"</span>)<br>→ Anna Smith · 12 messages · <span class="w">3 unread</span></div>
+        <div class="tools"><code>find_people</code><code>list_senders</code></div>
+      </article>
+      <article class="card c6 feature">
+        <div>
+          <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <h3>Nothing is sent without your “yes”</h3>
+          <p>The agent can draft a message or a reply in a thread, but it can’t send on its own. A confirmation window opens in your browser.</p>
+          <ul class="checks">
+            <li><b>Send</b>, <b>Edit</b> or <b>Don’t send</b> — your call</li>
+            <li>External addresses are highlighted; Bcc comes with a warning</li>
+            <li>Only your browser knows the window’s address, so text in an email can’t talk the agent into clicking the button</li>
+            <li>No answer in 50 seconds and the message isn’t sent; a retry never sends it twice</li>
+            <li>Sending stays off until you turn it on</li>
+          </ul>
+          <div class="tools"><code>send_email</code></div>
+        </div>
+        <figure>
+          <img class="only-dark" src="../img/confirm-dark.png" width="1456" height="968" alt="Send confirmation window (interface in Russian)" loading="lazy">
+          <img class="only-light" src="../img/confirm-light.png" width="1456" height="968" alt="Send confirmation window (interface in Russian)" loading="lazy">
+        </figure>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="how" aria-labelledby="how-title">
+  <div class="wrap">
+    <p class="eyebrow">How it works</p>
+    <h2 id="how-title">Three minutes <span class="grad">from install to first answer</span></h2>
+    <ol class="steps">
+      <li class="step">
+        <h3>Install with one command</h3>
+        <p>The installer puts its own Python in a separate folder and leaves the system one alone. To update, run the same command. Your settings are kept.</p>
+        <div class="mini">$ curl -LsSf …/install.sh | sh<br><span class="t">==&gt; Done: owa-mail-mcp 0.3</span></div>
+      </li>
+      <li class="step">
+        <h3>Connect your mailbox</h3>
+        <p>The setup window asks for the same details you use for web mail. Test connection shows your name and latest messages.</p>
+        <figure>
+          <img class="only-dark" src="../img/setup-account-dark.png" width="1456" height="1306" alt="Setup window (interface in Russian): server address, email, login, password, and a successful connection test" loading="lazy">
+          <img class="only-light" src="../img/setup-account-light.png" width="1456" height="1306" alt="Mailbox setup window (interface in Russian)" loading="lazy">
+        </figure>
+      </li>
+      <li class="step">
+        <h3>Ask your agent</h3>
+        <p>The Add button registers the server in Claude Code, Codex, Claude Desktop or Cursor. Then just ask: “what’s new in my inbox?”</p>
+        <div class="mini"><span class="k">› what’s new in my inbox since yesterday?</span><br><span class="t">⏺</span> owa-mail · check_mail → 12 messages</div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section id="install" aria-labelledby="install-title">
+  <div class="wrap">
+    <p class="eyebrow">Install</p>
+    <h2 id="install-title">Install and connect</h2>
+    <p class="section-sub">You need access to your mail server: if web mail only opens over VPN, turn the VPN on. The program's setup and confirmation windows are in Russian.</p>
+
+    <div class="panel-box" data-tabs>
+      <div class="tabs" role="tablist" aria-label="Install method">
+        <button role="tab" id="t-unix" aria-controls="p-unix" aria-selected="true">macOS and Linux</button>
+        <button role="tab" id="t-win" aria-controls="p-win" aria-selected="false" tabindex="-1">Windows</button>
+        <button role="tab" id="t-agent" aria-controls="p-agent" aria-selected="false" tabindex="-1">Through your agent</button>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-unix" aria-labelledby="t-unix">
+        <p>Paste into Terminal. The setup window opens in about a minute.</p>
+        <div class="code"><pre id="c-unix">curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh</pre><button class="copy" type="button" data-copy="#c-unix">Copy</button></div>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-win" aria-labelledby="t-win">
+        <p>In PowerShell:</p>
+        <div class="code"><pre id="c-win">powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+uv tool install --python 3.12 git+https://github.com/Khomiakov7706/owa-mail-mcp
+owa-mail-mcp setup</pre><button class="copy" type="button" data-copy="#c-win">Copy</button></div>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-agent" aria-labelledby="t-agent">
+        <p id="agents">Copy this text and send it to your agent (Claude Code, Codex, Cursor). It will install and connect the server for you. The agent doesn’t need your password: you enter it in the setup window.</p>
+        <div class="code"><pre class="wrap-text" id="c-agent">Install and connect the OWA Mail MCP server for my Exchange work email.
+1. Run: curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh
+2. Connect the server to yourself. For Claude Code: claude mcp add --scope user owa-mail -- ~/.local/bin/owa-mail-mcp
+3. I'll set up the mailbox (server address, login, password) myself in the window that opens — don't ask me for the password.
+4. Then call get_status and show me the result.
+Instructions for agents: https://khomiakov7706.github.io/owa-mail-mcp/llms.txt</pre><button class="copy" type="button" data-copy="#c-agent">Copy</button></div>
+      </div>
+    </div>
+
+    <div class="panel-box" data-tabs>
+      <div class="tabs" role="tablist" aria-label="Connect to a client">
+        <button role="tab" id="t-cc" aria-controls="p-cc" aria-selected="true">Claude Code</button>
+        <button role="tab" id="t-cd" aria-controls="p-cd" aria-selected="false" tabindex="-1">Claude Desktop</button>
+        <button role="tab" id="t-cx" aria-controls="p-cx" aria-selected="false" tabindex="-1">Codex</button>
+        <button role="tab" id="t-cu" aria-controls="p-cu" aria-selected="false" tabindex="-1">Cursor</button>
+        <button role="tab" id="t-oc" aria-controls="p-oc" aria-selected="false" tabindex="-1">OpenCode</button>
+        <button role="tab" id="t-kc" aria-controls="p-kc" aria-selected="false" tabindex="-1">Kilo Code</button>
+        <button role="tab" id="t-any" aria-controls="p-any" aria-selected="false" tabindex="-1">Other client</button>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-cc" aria-labelledby="t-cc">
+        <p>The easiest way is the Add button in the setup window (<code>owa-mail-mcp setup</code>). Or in a terminal:</p>
+        <div class="code"><pre id="c-cc">claude mcp add --scope user owa-mail -- ~/.local/bin/owa-mail-mcp</pre><button class="copy" type="button" data-copy="#c-cc">Copy</button></div>
+        <p>To check: <code>claude mcp list</code>, or <code>/mcp</code> in a session.</p>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-cd" aria-labelledby="t-cd">
+        <p>Settings → Developer → Edit Config, then restart Claude Desktop. The setup window fills in the exact path for you.</p>
+        <div class="code"><pre id="c-cd">{
+  "mcpServers": {
+    "owa-mail": { "command": "/Users/YOU/.local/bin/owa-mail-mcp" }
+  }
+}</pre><button class="copy" type="button" data-copy="#c-cd">Copy</button></div>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-cx" aria-labelledby="t-cx">
+        <div class="code"><pre id="c-cx">codex mcp add owa-mail -- ~/.local/bin/owa-mail-mcp</pre><button class="copy" type="button" data-copy="#c-cx">Copy</button></div>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-cu" aria-labelledby="t-cu">
+        <p>File <code>~/.cursor/mcp.json</code>:</p>
+        <div class="code"><pre id="c-cu">{
+  "mcpServers": {
+    "owa-mail": { "command": "/Users/YOU/.local/bin/owa-mail-mcp" }
+  }
+}</pre><button class="copy" type="button" data-copy="#c-cu">Copy</button></div>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-oc" aria-labelledby="t-oc">
+        <p>File <code>~/.config/opencode/opencode.json</code> (for a single project, <code>opencode.json</code> in its root). OpenCode has its own format: an <code>mcp</code> key, <code>"type": "local"</code>, and the command as an array. OpenCode doesn’t read the <code>mcpServers</code> key. The Add button in the setup window writes this for you.</p>
+        <div class="code"><pre id="c-oc">{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "owa-mail": {
+      "type": "local",
+      "command": ["/Users/YOU/.local/bin/owa-mail-mcp"],
+      "enabled": true
+    }
+  }
+}</pre><button class="copy" type="button" data-copy="#c-oc">Copy</button></div>
+        <p>Restart OpenCode. To check: <code>opencode mcp list</code>.</p>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-kc" aria-labelledby="t-kc">
+        <p>Newer Kilo Code versions use the same format as OpenCode, in <code>~/.config/kilo/kilo.jsonc</code> (for a project, <code>kilo.jsonc</code> or <code>.kilo/kilo.jsonc</code>):</p>
+        <div class="code"><pre id="c-kc">{
+  "mcp": {
+    "owa-mail": {
+      "type": "local",
+      "command": ["/Users/YOU/.local/bin/owa-mail-mcp"],
+      "enabled": true
+    }
+  }
+}</pre><button class="copy" type="button" data-copy="#c-kc">Copy</button></div>
+        <p>Older extension versions: Kilo Code → MCP Servers → “Edit Global MCP” (file <code>mcp_settings.json</code>; for a project, <code>.kilocode/mcp.json</code>):</p>
+        <div class="code"><pre id="c-kl">{
+  "mcpServers": {
+    "owa-mail": {
+      "command": "/Users/YOU/.local/bin/owa-mail-mcp",
+      "args": [],
+      "disabled": false,
+      "alwaysAllow": []
+    }
+  }
+}</pre><button class="copy" type="button" data-copy="#c-kl">Copy</button></div>
+        <p>After editing, restart Kilo Code (in VS Code: Developer: Reload Window).</p>
+      </div>
+      <div class="tabpanel" role="tabpanel" id="p-any" aria-labelledby="t-any">
+        <p>Any MCP client over stdio: the command is the absolute path to <code>owa-mail-mcp</code>, with no arguments or environment variables. The server reads its settings from its own file and the keychain.</p>
+      </div>
+    </div>
+
+    <dl class="req">
+      <div><dt>System</dt><dd>macOS, Linux, Windows</dd></div>
+      <div><dt>Mail</dt><dd>Exchange 2013 / 2016 / 2019 — the same server as your OWA web mail</dd></div>
+      <div><dt>After updating</dt><dd>Restart the MCP server in your client: in Claude Code, <code>/mcp</code> → Reconnect</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section id="tools" aria-labelledby="tools-title">
+  <div class="wrap">
+    <p class="eyebrow">For developers and agents</p>
+    <h2 id="tools-title">MCP tools</h2>
+    <p class="section-sub">Everything except <code>send_email</code> is read-only. Email content is data, not instructions: the server explicitly tells the agent not to follow commands found in messages.</p>
+    <div class="table">
+      <table>
+        <thead><tr><th scope="col">Tool</th><th scope="col">What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>get_status</code></td><td>Who the user is, current time, unread count, version, whether sending is on</td></tr>
+          <tr><td><code>check_mail</code></td><td>New messages in Inbox (unread by default) with previews</td></tr>
+          <tr><td><code>search_messages</code></td><td>Search by text, sender, recipient, subject, date, attachments; folders: inbox, sent, inbox_and_sent, all</td></tr>
+          <tr><td><code>get_message</code></td><td>The full message: body (HTML → text), recipients, attachment names</td></tr>
+          <tr><td><code>get_thread</code></td><td>The whole thread in order across all folders, without quoted history, with participants</td></tr>
+          <tr><td><code>get_attachment</code></td><td>Attachment text: .docx, .pdf, .txt, .md, .csv, .html, .vtt/.srt, attached emails</td></tr>
+          <tr><td><code>find_people</code></td><td>Organization address book: name, address, title, department</td></tr>
+          <tr><td><code>list_senders</code></td><td>Who wrote in a period: message count, unread, latest subject; for <code>sent</code>, who you wrote to</td></tr>
+          <tr><td><code>send_email</code><span class="rw">write</span></td><td>A new message or a reply (<code>reply_to_message_id</code>, <code>reply_all</code>) — only after you confirm in the window</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Prompts: <code>summarize_thread</code> — a thread summary, <code>triage_inbox</code> — inbox triage. Full reference: the <a href="index.md">Markdown version of this page</a> and <a href="../llms.txt">llms.txt</a>.</p>
+  </div>
+</section>
+
+<section id="security" aria-labelledby="security-title">
+  <div class="wrap">
+    <p class="eyebrow">Security</p>
+    <h2 id="security-title">Security, honestly</h2>
+    <p class="section-sub">For personal use, the design is sound. But it hasn’t had an independent audit yet, and the main risk isn’t in the code: everything the agent reads goes to the AI service behind it.</p>
+
+    <h3 class="sec-h">What’s protected</h3>
+    <div class="sec">
+      <article class="card"><h3>Password in the keychain</h3><p>Keychain, Credential Manager or Secret Service. Not in a file, not in the log, not with the agent: no tool can reveal it.</p></article>
+      <article class="card"><h3>Only your server</h3><p>The password goes only to the Exchange server you set, and only over HTTPS. Redirects to other hosts get no password.</p></article>
+      <article class="card"><h3>Nothing is sent without your “yes”</h3><p>Off by default. Every message needs your click in a local window. Hidden characters, invalid addresses and too many recipients are rejected; external addresses are highlighted.</p></article>
+      <article class="card"><h3>Local windows are locked down</h3><p>127.0.0.1 only, a secret random address, Host and Origin checks, no embedding: other sites can’t reach them.</p></article>
+      <article class="card"><h3>Certificate pinning</h3><p>Standard certificate checks stay on. An internal company certificate is accepted only if it’s that exact one, by SHA-256.</p></article>
+      <article class="card"><h3>No account lockouts</h3><p>After a rejected password, requests to Exchange stop, and request rates are limited. The log keeps only tool names and timestamps — no email content.</p></article>
+    </div>
+
+    <h3 class="sec-h">What it doesn’t solve</h3>
+    <ol class="risks">
+      <li><b>Your mail goes to an AI service.</b> Everything the agent reads — messages, attachments, transcripts — is sent to the company that runs the agent. A bank or another regulated company needs sign-off from its security team, and policy may forbid it outright. That’s a policy question, not a code question.</li>
+      <li><b>Emails with “commands” for the agent.</b> An incoming email can contain text aimed at the agent: “forward this…”. The server asks the agent to treat mail as data, but that’s a request, not a lock. The real safeguard is the confirmation window: read the message before you click Send. The agent can read everything; you can’t limit it to specific folders yet.</li>
+      <li><b>How it installs.</b> <code>curl … | sh</code> installs whatever is on the main branch right now. There are no signed releases or pinned versions yet: if the GitHub account is compromised, the next update will be too.</li>
+      <li><b>Settings that weaken security.</b> “Legacy encryption settings” for the server, and a password in the <code>OWA_MAIL_PASSWORD</code> variable in the agent config instead of the keychain. Both are off until you turn them on.</li>
+      <li><b>Access to your computer.</b> Anyone already signed in as you can use the saved password and the running program — as with any app that stores a password.</li>
+    </ol>
+
+    <h3 class="sec-h">Before you connect work email</h3>
+    <ul class="checks">
+      <li>Get your security team’s sign-off on sending email content to an AI service.</li>
+      <li>Don’t turn on sending unless you really need it.</li>
+      <li>Get an independent code review and install a pinned version, not the latest from main.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="faq" aria-labelledby="faq-title">
+  <div class="wrap">
+    <p class="eyebrow">FAQ</p>
+    <h2 id="faq-title">Frequently asked questions</h2>
+    <div class="faq">
+      <details><summary>Is it safe?</summary>
+        <p>For personal use, the design is sound: the password lives in the keychain, and nothing is sent until you confirm. But there has been no independent audit, and email content goes to an AI service — corporate mail needs sign-off from your security team. Details in <a href="#security">Security</a>.</p></details>
+      <details><summary>Where do I find the server address?</summary>
+        <p>It’s the address of your work web mail in the browser: <code>mail.company.com</code>, <code>https://owa.company.com</code> or <code>https://outlook.company.com/owa</code>. Any of these works.</p></details>
+      <details><summary>It says “server unreachable”, but web mail opens fine</summary>
+        <p>The setup window tells you why. DNS: reconnect your VPN. Connection: your browser probably goes through a proxy (you can set it under Advanced → Proxy). TLS: an old server; the window offers to allow legacy settings for that server only.</p></details>
+      <details><summary>It says “the server doesn’t respond like EWS”</summary>
+        <p>There’s a gateway with a web login in front of EWS. The program first signs in through OWA and continues on the same connection — that’s usually enough. If not, use Copy diagnostics in the setup window (no passwords included) and send it to IT or open an issue.</p></details>
+      <details><summary>Where are my login and password stored? Do they survive updates?</summary>
+        <p>The password is in the system keychain; everything else is in <code>config.json</code> in your user folder (on a Mac, <code>~/Library/Application Support/owa-mail-mcp</code>). Updates don’t touch them. To check: <code>owa-mail-mcp status</code>.</p></details>
+      <details><summary>I updated, but the errors are the same</summary>
+        <p>Your client is still running the old process. Restart the MCP server: in Claude Code, <code>/mcp</code> → owa-mail → Reconnect; in Claude Desktop and Cursor, quit and reopen the app.</p></details>
+      <details><summary>How do I know it’s working?</summary>
+        <p>Ask your agent to “check my mail status”. <code>get_status</code> returns your address, unread count and version. The call log is at the bottom of the setup window.</p></details>
+      <details><summary>Can the agent send mail without me?</summary>
+        <p>No. Sending is off by default, and every message goes through a confirmation window whose address only your browser knows. No answer in 50 seconds and the message isn’t sent.</p></details>
+      <details><summary>Exchange Online (Microsoft 365)?</summary>
+        <p>The server is built for on-premises Exchange 2013–2019 over EWS. Microsoft 365 has disabled password sign-in for EWS, so for cloud mail, servers built on Microsoft Graph are a better fit.</p></details>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <section class="band" aria-labelledby="cta-title">
+    <h2 id="cta-title">Inbox: 0. <span class="grad">Enjoy your evening.</span></h2>
+    <p class="section-sub">One command, and your agent reads work email right alongside you.</p>
+    <div class="cmd">
+      <span class="p" aria-hidden="true">$</span>
+      <code id="cmd-cta">curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh</code>
+      <button class="copy" type="button" data-copy="#cmd-cta">Copy</button>
+    </div>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="grow">OWA Mail MCP · MIT</span>
+    <a href="https://github.com/Khomiakov7706/owa-mail-mcp">GitHub</a>
+    <a href="https://github.com/Khomiakov7706/owa-mail-mcp/issues">Report an issue</a>
+    <a href="index.md">Markdown</a>
+    <a href="../llms.txt">llms.txt</a>
+    <a href="https://modelcontextprotocol.io/">What is MCP</a>
+  </div>
+</footer>
+
+<script src="../site.js"></script>
+</body>
+</html>

@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://khomiakov7706.github.io/owa-mail-mcp/</loc></url>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url><loc>https://khomiakov7706.github.io/owa-mail-mcp/</loc>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://khomiakov7706.github.io/owa-mail-mcp/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://khomiakov7706.github.io/owa-mail-mcp/en/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://khomiakov7706.github.io/owa-mail-mcp/zh/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://khomiakov7706.github.io/owa-mail-mcp/es/"/></url>
+  <url><loc>https://khomiakov7706.github.io/owa-mail-mcp/en/</loc></url>
+  <url><loc>https://khomiakov7706.github.io/owa-mail-mcp/zh/</loc></url>
+  <url><loc>https://khomiakov7706.github.io/owa-mail-mcp/es/</loc></url>
   <url><loc>https://khomiakov7706.github.io/owa-mail-mcp/index.md</loc></url>
+  <url><loc>https://khomiakov7706.github.io/owa-mail-mcp/en/index.md</loc></url>
   <url><loc>https://khomiakov7706.github.io/owa-mail-mcp/llms.txt</loc></url>
 </urlset>
