@@ -42,6 +42,7 @@ class _SetupLauncher:
         self._lock = threading.Lock()
 
     def __call__(self) -> bool:
+        from .i18n import t
         from .setup import SetupApp
 
         with self._lock:
@@ -51,7 +52,7 @@ class _SetupLauncher:
             if time.monotonic() - self._last < 120:
                 return True
             self._last = time.monotonic()
-            return self._app.app.open_in_browser("open this address to set up OWA Mail MCP")
+            return self._app.app.open_in_browser(t("cli.setup_open"))
 
     def stop(self) -> None:
         if self._app is not None:
@@ -80,28 +81,33 @@ def serve() -> None:
 def status() -> int:
     from . import __version__
     from .config import config_path
+    from .i18n import LANGUAGES, current_language, t
 
     settings = Settings.load()
+    lang = current_language(settings)
     path = config_path()
-    print(f"owa-mail-mcp {__version__}")
-    print(f"settings: {path}" + ("" if path.exists() else " (not created yet)"))
+    print(t("cli.version", lang, version=__version__))
+    print(t("cli.settings", lang, path=path) + ("" if path.exists() else t("cli.not_created", lang)))
+    print(t("cli.language", lang, value=LANGUAGES[lang]))
     if settings.backend == "demo":
-        print("mailbox: demo")
+        print(t("cli.mailbox_demo", lang))
         return 0
-    print(f"server:   {settings.server or '-'}")
-    print(f"email:    {settings.email or '-'}")
-    print(f"login:    {settings.login or '-'}")
-    print(f"password: {'saved' if settings.password else 'missing'}")
-    print(f"sending:  {'allowed' if settings.allow_send else 'off'}")
+    print(t("cli.server", lang, value=settings.server or "-"))
+    print(t("cli.email", lang, value=settings.email or "-"))
+    print(t("cli.login", lang, value=settings.login or "-"))
+    print(t("cli.password", lang, value=t("cli.password_saved" if settings.password else "cli.password_missing", lang)))
+    print(t("cli.sending", lang, value=t("cli.sending_on" if settings.allow_send else "cli.sending_off", lang)))
     return 0 if settings.is_configured else 2
 
 
 def check() -> int:
     from .backend import SearchQuery
+    from .i18n import current_language, t
 
     settings = Settings.load()
+    lang = current_language(settings)
     if not settings.is_configured:
-        print("Not set up yet: run `owa-mail-mcp setup`.", file=sys.stderr)
+        print(t("cli.not_set_up", lang), file=sys.stderr)
         return 1
     try:
         backend = make_backend(settings)
@@ -109,13 +115,13 @@ def check() -> int:
         unread = backend.unread_count()
         latest = backend.search(SearchQuery(folder="inbox", limit=3)).messages
     except BackendError as exc:
-        print(f"FAILED: {exc}", file=sys.stderr)
+        print(t("cli.failed", lang, error=exc), file=sys.stderr)
         return 1
-    print(f"OK: {me.name or ''} <{me.email}>, unread in Inbox: {unread}")
+    print(t("cli.ok", lang, who=f"{me.name} " if me.name else "", email=me.email, unread=unread))
     for m in latest:
         sender = (m.sender.name or m.sender.email) if m.sender else "?"
         print(f"  {m.received:%Y-%m-%d %H:%M}  {sender}: {m.subject}")
-    print(f"Sending: {'allowed, with the confirmation window' if settings.allow_send else 'off'}")
+    print(t("cli.check_sending", lang, value=t("cli.check_sending_on" if settings.allow_send else "cli.sending_off", lang)))
     return 0
 
 
@@ -123,9 +129,11 @@ def diagnose_cmd() -> int:
     from .diagnose import diagnose
     from .ews_backend import ews_endpoint
 
+    from .i18n import t
+
     settings = Settings.load()
     if not settings.server:
-        print("Not set up yet: run `owa-mail-mcp setup`.", file=sys.stderr)
+        print(t("cli.not_set_up"), file=sys.stderr)
         return 1
     print(diagnose(settings, ews_endpoint(settings.server)).text())
     return 0

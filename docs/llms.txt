@@ -1,6 +1,6 @@
 # OWA Mail MCP
 
-> MCP server for Microsoft Exchange / OWA mail (Exchange 2013–2019 via EWS). Lets an AI agent (Claude Code, Claude Desktop, Codex, Cursor, OpenCode, Kilo Code, any stdio MCP client) check mail, search messages, read threads and attachments (including meeting transcripts), look up people, and send email only after the user approves each message in a local browser window. Open source, MIT. The site is in Russian, English, Chinese and Spanish; the program's own windows are in Russian.
+> MCP server for Microsoft Exchange / OWA mail (Exchange 2013–2019 via EWS). Lets an AI agent (Claude Code, Claude Desktop, Codex, Cursor, OpenCode, Kilo Code, any stdio MCP client) check mail, search messages, read threads and attachments (including meeting transcripts), look up people, and send email only after the user approves each message in a local browser window. Open source, MIT. The site and the program's windows are in Russian, English, Chinese and Spanish (the windows follow the system language; OWA_MAIL_LANG or the setup window overrides it).
 
 Key facts for agents:
 

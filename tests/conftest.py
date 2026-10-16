@@ -6,6 +6,12 @@ from owa_mail_mcp.server import build_server
 from owa_mail_mcp.ui import ConfirmationUI
 
 
+@pytest.fixture(autouse=True)
+def russian_interface(monkeypatch):
+    """Most tests check the Russian texts; tests of other languages set OWA_MAIL_LANG themselves."""
+    monkeypatch.setenv("OWA_MAIL_LANG", "ru")
+
+
 @pytest.fixture
 def anyio_backend():
     return "asyncio"

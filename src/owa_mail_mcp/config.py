@@ -61,6 +61,8 @@ class Settings:
     """`host:port` the user allowed to use old TLS settings that browsers accept and OpenSSL 3 refuses."""
     proxy: str | None = None
     """HTTPS proxy for Exchange, when the browser uses one the system settings do not show (a PAC script)."""
+    language: str | None = None
+    """Interface language of the windows and messages (`ru`, `en`, `zh`, `es`); None follows the system."""
 
     @property
     def login(self) -> str | None:
@@ -105,7 +107,7 @@ def _env_overrides() -> dict[str, Any]:
     text = {
         "OWA_MAIL_BACKEND": "backend", "OWA_MAIL_SERVER": "server", "OWA_MAIL_EMAIL": "email",
         "OWA_MAIL_USERNAME": "username", "OWA_MAIL_PASSWORD": "password", "OWA_MAIL_AUTH": "auth_type",
-        "OWA_MAIL_UI_HOST": "ui_host", "OWA_MAIL_PROXY": "proxy",
+        "OWA_MAIL_UI_HOST": "ui_host", "OWA_MAIL_PROXY": "proxy", "OWA_MAIL_LANG": "language",
     }
     for var, name in text.items():
         if env.get(var):

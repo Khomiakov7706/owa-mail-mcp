@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="{{LANG}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Подтверждение отправки</title>
+<title>{{t:confirm.title}}</title>
 <style nonce="{{NONCE}}">
 :root {
   --bg: #f5f5f7; --card: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7;
@@ -62,19 +62,21 @@ h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: upp
   <header>
     <span class="dot" id="dot"></span>
     <div>
-      <h1>OWA Mail MCP — подтверждение отправки</h1>
-      <div class="sub">Письмо уходит только после нажатия «Отправить» здесь. Ассистент этой страницы не видит.</div>
+      <h1>{{t:confirm.h1}}</h1>
+      <div class="sub">{{t:confirm.sub}}</div>
     </div>
   </header>
   <section id="pending"></section>
-  <h2 id="history-title" hidden>Недавние</h2>
+  <h2 id="history-title" hidden>{{t:confirm.history}}</h2>
   <section id="history"></section>
 </main>
 <script nonce="{{NONCE}}">
 "use strict";
 const base = location.pathname.endsWith("/") ? location.pathname : location.pathname + "/";
-const STATUS = { sent: "Отправлено", failed: "Ошибка отправки", rejected: "Отменено вами", expired: "Время вышло — не отправлено",
-                 cancelled: "Ассистент отменил запрос", approved: "Отправляется…" };
+const I18N = {{I18N}};
+const T = (key, vars) => (I18N["confirm." + key] ?? I18N[key] ?? key).replace(/\{(\w+)\}/g, (m, k) => vars && k in vars ? String(vars[k]) : m);
+// A message from the server in the user's language when it carries a code; its English text otherwise.
+const said = (text, code, params) => code && I18N["policy." + code] ? T("policy." + code, params) : text;
 const editing = new Map();   // id -> draft being edited, so polling does not wipe what the user types
 const errors = new Map();
 let lastPendingIds = "";
@@ -93,7 +95,7 @@ function el(tag, attrs, ...children) {
 function chips(list, external) {
   const ext = new Set((external || []).map(e => e.toLowerCase()));
   return el("div", { class: "chips" }, list.map(a => el("span", { class: "chip" + (ext.has(a.toLowerCase()) ? " ext" : ""),
-    title: ext.has(a.toLowerCase()) ? "Внешний адрес" : "" }, a + (ext.has(a.toLowerCase()) ? " · внешний" : ""))));
+    title: ext.has(a.toLowerCase()) ? T("external_title") : "" }, a + (ext.has(a.toLowerCase()) ? " · " + T("external") : ""))));
 }
 
 async function decide(id, action, edits) {
@@ -102,7 +104,7 @@ async function decide(id, action, edits) {
     const res = await fetch(base + "api/decide", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, action, edits }) });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) errors.set(id, data.error || ("HTTP " + res.status));
+    if (!res.ok) errors.set(id, said(data.error || ("HTTP " + res.status), data.code, data.params));
     else editing.delete(id);
   } catch (e) { errors.set(id, String(e)); }
   refresh(true);
@@ -111,11 +113,11 @@ async function decide(id, action, edits) {
 function pendingCard(item) {
   const m = item.message;
   const draft = editing.get(item.id);
-  const timer = el("span", { class: "timer" + (item.seconds_left <= 10 ? " low" : ""), "data-id": item.id }, `${item.seconds_left} с`);
+  const timer = el("span", { class: "timer" + (item.seconds_left <= 10 ? " low" : ""), "data-id": item.id }, T("seconds", { n: item.seconds_left }));
   const card = el("div", { class: "card pending" },
     el("div", { class: "top" },
-      el("div", { class: "who" }, (item.client || "MCP-клиент") + " просит отправить письмо"), timer),
-    item.reply_context ? el("div", { class: "reply" }, `Ответ на «${item.reply_context.subject}» от ${item.reply_context.from || "?"}`) : null);
+      el("div", { class: "who" }, T("asks", { client: item.client || T("mcp_client") })), timer),
+    item.reply_context ? el("div", { class: "reply" }, T("reply_to", { subject: item.reply_context.subject, from: item.reply_context.from || "?" })) : null);
 
   if (draft) {
     const f = {};
@@ -126,26 +128,27 @@ function pendingCard(item) {
       f[key] = input;
       return [el("label", {}, label), input];
     };
-    card.append(...field("to", "Кому (через запятую)"), ...field("cc", "Копия"), ...field("bcc", "Скрытая копия"),
-                ...field("subject", "Тема"), ...field("body", "Текст", true));
+    card.append(...field("to", T("field_to")), ...field("cc", T("field_cc")), ...field("bcc", T("field_bcc")),
+                ...field("subject", T("field_subject")), ...field("body", T("field_body"), true));
     card.append(el("div", { class: "actions" },
-      el("button", { class: "primary", onclick: () => decide(item.id, "approve", draft) }, "Отправить с правками"),
-      el("button", { onclick: () => { editing.delete(item.id); render(window.__items || []); } }, "Отменить правки"),
-      el("button", { onclick: () => decide(item.id, "reject") }, "Не отправлять")));
+      el("button", { class: "primary", onclick: () => decide(item.id, "approve", draft) }, T("send_edited")),
+      el("button", { onclick: () => { editing.delete(item.id); render(window.__items || []); } }, T("cancel_edits")),
+      el("button", { onclick: () => decide(item.id, "reject") }, T("dont_send"))));
   } else {
     card.append(el("div", {},
-      el("div", { class: "row" }, el("div", { class: "k" }, "От"), el("div", {}, item.from || "")),
-      el("div", { class: "row" }, el("div", { class: "k" }, "Кому"), chips(m.to, item.external)),
-      m.cc.length ? el("div", { class: "row" }, el("div", { class: "k" }, "Копия"), chips(m.cc, item.external)) : null,
-      m.bcc.length ? el("div", { class: "row" }, el("div", { class: "k" }, "Скрытая"), chips(m.bcc, item.external)) : null,
-      el("div", { class: "row" }, el("div", { class: "k" }, "Тема"), el("div", { class: "subject" }, m.subject)),
+      el("div", { class: "row" }, el("div", { class: "k" }, T("from")), el("div", {}, item.from || "")),
+      el("div", { class: "row" }, el("div", { class: "k" }, T("to")), chips(m.to, item.external)),
+      m.cc.length ? el("div", { class: "row" }, el("div", { class: "k" }, T("cc")), chips(m.cc, item.external)) : null,
+      m.bcc.length ? el("div", { class: "row" }, el("div", { class: "k" }, T("bcc")), chips(m.bcc, item.external)) : null,
+      el("div", { class: "row" }, el("div", { class: "k" }, T("subject")), el("div", { class: "subject" }, m.subject)),
       el("pre", { class: "body" }, m.body)));
-    const warnings = [...(item.external.length ? [`Внешние получатели: ${item.external.length}`] : []), ...item.warnings];
+    const warnings = [...(item.external.length ? [T("external_count", { n: item.external.length })] : []),
+                      ...item.warnings.map((w, i) => said(w, (item.warning_codes || [])[i]))];
     if (warnings.length) card.append(el("div", { class: "warn" }, el("ul", {}, warnings.map(w => el("li", {}, w)))));
     card.append(el("div", { class: "actions" },
-      el("button", { class: "primary", onclick: (e) => { e.target.disabled = true; decide(item.id, "approve"); } }, "Отправить"),
-      el("button", { onclick: () => { editing.set(item.id, { to: m.to.join(", "), cc: m.cc.join(", "), bcc: m.bcc.join(", "), subject: m.subject, body: m.body }); render(window.__items || []); } }, "Изменить"),
-      el("button", { onclick: () => decide(item.id, "reject") }, "Не отправлять")));
+      el("button", { class: "primary", onclick: (e) => { e.target.disabled = true; decide(item.id, "approve"); } }, T("send")),
+      el("button", { onclick: () => { editing.set(item.id, { to: m.to.join(", "), cc: m.cc.join(", "), bcc: m.bcc.join(", "), subject: m.subject, body: m.body }); render(window.__items || []); } }, T("edit")),
+      el("button", { onclick: () => decide(item.id, "reject") }, T("dont_send"))));
   }
   if (errors.has(item.id)) card.append(el("div", { class: "err" }, errors.get(item.id)));
   return card;
@@ -154,8 +157,8 @@ function pendingCard(item) {
 function historyRow(item) {
   const m = item.message;
   return el("div", { class: "card done" },
-    el("div", { class: "ell" }, el("span", { class: "subject" }, m.subject), " → ", m.to.join(", "), item.edited ? " (с вашими правками)" : ""),
-    el("div", { class: "s " + item.status }, STATUS[item.status] || item.status, item.error ? `: ${item.error}` : ""));
+    el("div", { class: "ell" }, el("span", { class: "subject" }, m.subject), " → ", m.to.join(", "), item.edited ? T("edited_suffix") : ""),
+    el("div", { class: "s " + item.status }, I18N["confirm.status_" + item.status] || item.status, item.error ? `: ${item.error}` : ""));
 }
 
 function render(items) {
@@ -167,17 +170,17 @@ function render(items) {
   if (ids === lastPendingIds && editing.size) {
     for (const i of pending) {
       const t = pendingBox.querySelector(`.timer[data-id="${i.id}"]`);
-      if (t) { t.textContent = `${i.seconds_left} с`; t.className = "timer" + (i.seconds_left <= 10 ? " low" : ""); }
+      if (t) { t.textContent = T("seconds", { n: i.seconds_left }); t.className = "timer" + (i.seconds_left <= 10 ? " low" : ""); }
     }
   } else {
-    pendingBox.replaceChildren(...(pending.length ? pending.map(pendingCard) : [el("div", { class: "empty" }, "Нет писем, ожидающих подтверждения.")]));
+    pendingBox.replaceChildren(...(pending.length ? pending.map(pendingCard) : [el("div", { class: "empty" }, T("empty"))]));
   }
   lastPendingIds = ids;
   for (const id of [...editing.keys()]) if (!pending.some(i => i.id === id)) editing.delete(id);
   const done = items.filter(i => i.status !== "pending");
   document.getElementById("history-title").hidden = !done.length;
   document.getElementById("history").replaceChildren(...done.slice(0, 10).map(historyRow));
-  document.title = pending.length ? `(${pending.length}) Подтвердите отправку` : "Подтверждение отправки";
+  document.title = pending.length ? T("title_pending", { n: pending.length }) : T("title");
 }
 
 async function refresh() {

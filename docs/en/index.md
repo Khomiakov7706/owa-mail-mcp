@@ -2,7 +2,7 @@
 
 An MCP server for Microsoft Exchange / OWA. Your AI agent (Claude Code, Claude Desktop, Codex, Cursor, OpenCode, Kilo Code or any MCP client) checks your inbox, searches mail, summarizes threads and attachments, and finds people in the address book. A message goes out only when the user clicks Send in the confirmation window.
 
-The program's setup and confirmation windows are in Russian.
+The program's windows (setup and send confirmation) are in English, Russian, Chinese and Spanish: they follow the system language, and you can switch it in the setup window.
 
 - Site: https://khomiakov7706.github.io/owa-mail-mcp/en/ (Русский: /, 中文: /zh/, Español: /es/)
 - Code: https://github.com/Khomiakov7706/owa-mail-mcp (MIT)
@@ -43,6 +43,8 @@ Install and connect the OWA Mail MCP server for my Exchange work email.
 1. **Mailbox.** Web mail address (`mail.company.com`, `https://owa.company.com` or `https://outlook.company.com/owa`), email, login (`DOMAIN\login` if your company uses Windows sign-in), password. Test connection shows your name, unread count and latest messages; then Save. The password is stored in the system keychain.
 2. **What the agent may do.** Read-only by default. "Allow sending email" turns on `send_email`; every message is still confirmed in the window.
 3. **Connect to your agent.** An Add button for Claude Code, Codex, Claude Desktop, Cursor, or lines to copy.
+
+The windows follow the system language (English, Русский, 中文, Español); switch it in the top-right corner of the setup window or with `OWA_MAIL_LANG`.
 
 If the system doesn't trust the server's certificate (an internal company certificate authority), the window shows who issued it, its validity period and SHA-256 fingerprint, and offers to trust that exact certificate.
 

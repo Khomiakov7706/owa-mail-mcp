@@ -12,12 +12,17 @@ import threading
 import time
 from dataclasses import dataclass, field
 
+from .i18n import Coded
 from .models import Outgoing
 from .text import contains_bidi_controls, contains_hidden_characters, domain_of, is_valid_address, normalize_body
 
 
 class PolicyError(ValueError):
-    pass
+    """English for the agent, plus a message key the confirmation window shows in the user's language."""
+
+    def __init__(self, text: str, code: str = "", **params) -> None:
+        super().__init__(text)
+        self.code, self.params = code, params
 
 
 @dataclass
@@ -48,26 +53,27 @@ def check_outgoing(message: Outgoing, *, my_email: str | None, internal_domains:
 
     everyone = message.to + message.cc + message.bcc
     if not message.to:
-        raise PolicyError("At least one recipient in `to` is required.")
+        raise PolicyError("At least one recipient in `to` is required.", "no_to")
     if len(everyone) > max_recipients:
-        raise PolicyError(f"Too many recipients ({len(everyone)}); the limit is {max_recipients}.")
+        raise PolicyError(f"Too many recipients ({len(everyone)}); the limit is {max_recipients}.", "too_many", n=len(everyone), limit=max_recipients)
     bad = [e for e in everyone if not is_valid_address(e)]
     if bad:
         raise PolicyError(
             "Not a plain email address: " + ", ".join(repr(b) for b in bad[:5]) +
-            ". Use addresses from find_people or from the messages themselves; only ASCII addresses are accepted."
+            ". Use addresses from find_people or from the messages themselves; only ASCII addresses are accepted.",
+            "bad_address", list=", ".join(bad[:5]),
         )
     if not message.subject:
-        raise PolicyError("The subject is empty.")
+        raise PolicyError("The subject is empty.", "no_subject")
     if len(message.subject) > 255:
-        raise PolicyError("The subject is longer than 255 characters.")
+        raise PolicyError("The subject is longer than 255 characters.", "subject_long")
     if not message.body:
-        raise PolicyError("The body is empty.")
+        raise PolicyError("The body is empty.", "no_body")
     if len(message.body) > 100_000:
-        raise PolicyError("The body is longer than 100 000 characters.")
+        raise PolicyError("The body is longer than 100 000 characters.", "body_long")
     for label, text in (("subject", message.subject), ("body", message.body)):
         if contains_bidi_controls(text):
-            raise PolicyError(f"The {label} contains bidirectional control characters, which make text display differently from what is sent.")
+            raise PolicyError(f"The {label} contains bidirectional control characters, which make text display differently from what is sent.", f"bidi_{label}")
 
     review = OutgoingReview()
     mine = domain_of(my_email or "")
@@ -75,13 +81,13 @@ def check_outgoing(message: Outgoing, *, my_email: str | None, internal_domains:
     if internal:
         review.external = [e for e in everyone if domain_of(e) not in internal and not any(domain_of(e).endswith("." + d) for d in internal)]
     else:
-        review.warnings.append("Your own mail domain is unknown, so external recipients cannot be flagged.")
+        review.warnings.append(Coded("Your own mail domain is unknown, so external recipients cannot be flagged.", "unknown_domain"))
     if my_email and any(e.lower() == my_email.lower() for e in everyone):
-        review.warnings.append("You are among the recipients.")
+        review.warnings.append(Coded("You are among the recipients.", "self"))
     if contains_hidden_characters(message.subject) or contains_hidden_characters(message.body):
-        review.warnings.append("The text contains invisible characters (zero-width spaces or similar).")
+        review.warnings.append(Coded("The text contains invisible characters (zero-width spaces or similar).", "invisible"))
     if message.bcc:
-        review.warnings.append("There are hidden copies (Bcc).")
+        review.warnings.append(Coded("There are hidden copies (Bcc).", "bcc"))
     return review
 
 

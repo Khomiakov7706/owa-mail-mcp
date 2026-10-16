@@ -171,8 +171,10 @@ def anyio_backend():
     return "asyncio"
 
 
-def test_status_tells_the_installer_whether_to_open_setup(isolated, capsys):
+def test_status_tells_the_installer_whether_to_open_setup(isolated, capsys, monkeypatch):
     from owa_mail_mcp.__main__ import status
+
+    monkeypatch.setenv("OWA_MAIL_LANG", "en")
 
     assert status() == 2
     config.save_settings(Settings(server="owa.corp.ru", email="ivan@corp.ru", username="CORP\\ivan"))

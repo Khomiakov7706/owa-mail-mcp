@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="{{LANG}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Настройка OWA Mail MCP</title>
+<title>{{t:setup.title}}</title>
 <style nonce="{{NONCE}}">
 :root {
   --bg: #f5f5f7; --card: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7;
@@ -67,88 +67,105 @@ td.t { color: var(--muted); white-space: nowrap; width: 1%; }
 .e { color: var(--danger); } .k { color: var(--ok); }
 .saved { color: var(--ok); font-size: 13px; font-weight: 400; opacity: 0; transition: opacity .3s; }
 .saved.show { opacity: 1; }
+.head-right { display: flex; align-items: center; gap: 10px; }
+.lang { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.lang select { width: auto; margin: 0; padding: 4px 8px; font-size: 13px; }
+label.plain { margin: 0; font-weight: 400; }
+.gap-top { margin-top: 10px; }
+.actions.center { justify-content: center; }
+.actions.tight { margin-top: 8px; }
+.certs-title { margin-top: 14px; }
+.cert-row { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.strong { font-weight: 600; }
+pre.plain-text { color: var(--text); }
 footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 24px; word-break: break-all; }
 </style>
 </head>
 <body>
 <main>
   <header>
-    <h1>OWA Mail MCP — настройка</h1>
-    <span class="badge no" id="badge">Не настроено</span>
+    <h1>{{t:setup.h1}}</h1>
+    <div class="head-right">
+      <label class="lang plain" for="lang">{{t:setup.lang_label}}
+        <select id="lang"><option value="">{{t:setup.lang_auto}}</option></select></label>
+      <span class="badge no" id="badge">{{t:setup.badge_no}}</span>
+    </div>
   </header>
 
   <section class="card">
-    <h2>1. Почтовый ящик Exchange</h2>
-    <p class="lead">Те же данные, с которыми вы входите в корпоративную веб-почту (OWA). Пароль хранится в системной связке ключей, а не в файле.</p>
-    <label for="server">Адрес сервера</label>
+    <h2>{{t:setup.s1_title}}</h2>
+    <p class="lead">{{t:setup.s1_lead}}</p>
+    <label for="server">{{t:setup.server}}</label>
     <input type="text" id="server" placeholder="mail.company.com" autocomplete="off" spellcheck="false">
-    <div class="hint">Адрес веб-почты: mail.company.com, https://owa.company.com или https://outlook.company.com/owa</div>
-    <label for="email">Почта</label>
+    <div class="hint">{{t:setup.server_hint}}</div>
+    <label for="email">{{t:setup.email}}</label>
     <input type="email" id="email" placeholder="ivan.petrov@company.com" autocomplete="off" spellcheck="false">
-    <label for="username">Логин <span class="hint">(если отличается от почты)</span></label>
+    <label for="username">{{t:setup.username}} <span class="hint">{{t:setup.username_note}}</span></label>
     <input type="text" id="username" placeholder="COMPANY\ipetrov" autocomplete="off" spellcheck="false">
-    <div class="hint">Если в компании вход Windows (единый вход), укажите DOMAIN\login.</div>
-    <label for="password">Пароль</label>
+    <div class="hint">{{t:setup.username_hint}}</div>
+    <label for="password">{{t:setup.password}}</label>
     <input type="password" id="password" autocomplete="off">
     <div class="hint" id="password-hint"></div>
     <details>
-      <summary>Дополнительно</summary>
-      <label for="auth">Способ входа</label>
+      <summary>{{t:setup.advanced}}</summary>
+      <label for="auth">{{t:setup.auth}}</label>
       <select id="auth">
-        <option value="ntlm">NTLM — вход Windows (по умолчанию)</option>
+        <option value="ntlm">{{t:setup.auth_ntlm}}</option>
         <option value="basic">Basic</option>
         <option value="kerberos">Kerberos</option>
       </select>
-      <label for="proxy">Прокси</label>
+      <label for="proxy">{{t:setup.proxy}}</label>
       <input type="text" id="proxy" placeholder="proxy.company.com:3128" autocomplete="off" spellcheck="false">
-      <div class="hint">Нужен, только если браузер ходит к почте через прокси, который не виден в системных настройках (например, задан PAC-скриптом). Системный прокси подхватывается сам.</div>
+      <div class="hint">{{t:setup.proxy_hint}}</div>
     </details>
     <div class="actions">
-      <button id="test">Проверить подключение</button>
-      <button class="primary" id="save" disabled>Сохранить</button>
-      <span class="saved" id="account-saved">Сохранено</span>
+      <button id="test">{{t:setup.test}}</button>
+      <button class="primary" id="save" disabled>{{t:setup.save}}</button>
+      <span class="saved" id="account-saved">{{t:setup.saved}}</span>
     </div>
     <div id="test-result"></div>
     <div id="certs"></div>
   </section>
 
   <section class="card">
-    <h2>2. Что разрешено ассистенту <span class="saved" id="access-saved">Сохранено</span></h2>
-    <p class="lead">Ассистент читает почту: проверяет новые письма, ищет, читает переписку, ищет людей в адресной книге.</p>
+    <h2>{{t:setup.s2_title}} <span class="saved" id="access-saved">{{t:setup.saved}}</span></h2>
+    <p class="lead">{{t:setup.s2_lead}}</p>
     <div class="switch">
       <input type="checkbox" id="allow-send">
-      <label for="allow-send" style="margin:0;font-weight:400"><b>Разрешить отправку писем</b>
-        <span class="hint">Каждое письмо открывается в отдельном окне в браузере: вы видите получателей (внешние выделены), тему и текст и сами нажимаете «Отправить», «Изменить» или «Не отправлять». Без вашего нажатия ничего не уходит.</span></label>
+      <label class="plain" for="allow-send"><b>{{t:setup.allow_send}}</b>
+        <span class="hint">{{t:setup.allow_send_hint}}</span></label>
     </div>
-    <label for="domains">Свои домены <span class="hint">(не отмечать как внешние)</span></label>
+    <label for="domains">{{t:setup.domains}} <span class="hint">{{t:setup.domains_note}}</span></label>
     <input type="text" id="domains" placeholder="company.ru, company.com" spellcheck="false">
-    <div class="hint">Домен вашей почты учитывается сам; здесь — дополнительные домены компании.</div>
-    <label for="timeout">Сколько ждать подтверждения, секунд</label>
+    <div class="hint">{{t:setup.domains_hint}}</div>
+    <label for="timeout">{{t:setup.timeout}}</label>
     <input type="number" id="timeout" min="15" max="600" step="5">
-    <div class="hint">Большинство клиентов прерывают вызов через 60 секунд, поэтому по умолчанию 50.</div>
-    <div class="warn">Темы, тексты и адреса писем, которые прочитает ассистент, уходят в AI-сервис, которым вы пользуетесь. Убедитесь, что политика компании это разрешает.</div>
+    <div class="hint">{{t:setup.timeout_hint}}</div>
+    <div class="warn">{{t:setup.ai_warning}}</div>
   </section>
 
   <section class="card">
-    <h2>3. Подключение к ассистенту</h2>
-    <p class="lead">Нажмите «Добавить» или скопируйте строку в настройки своего MCP-клиента. Любой stdio-клиент подключается так же: команда — путь к owa-mail-mcp, без аргументов.</p>
+    <h2>{{t:setup.s3_title}}</h2>
+    <p class="lead">{{t:setup.s3_lead}}</p>
     <div id="clients"></div>
-    <div class="hint" style="margin-top:10px">Учётные данные и разрешения подхватываются без перезапуска клиента.</div>
+    <div class="hint gap-top">{{t:setup.s3_hint}}</div>
   </section>
 
   <section class="card">
-    <h2>Журнал вызовов</h2>
-    <p class="lead">Какие инструменты вызывал ассистент. Хранятся только названия и время, без содержимого писем.</p>
+    <h2>{{t:setup.journal_title}}</h2>
+    <p class="lead">{{t:setup.journal_lead}}</p>
     <div id="journal"></div>
   </section>
 
-  <div class="actions" style="justify-content:center" id="done-row" hidden>
-    <button class="primary" id="done">Готово</button>
+  <div class="actions center" id="done-row" hidden>
+    <button class="primary" id="done">{{t:setup.done}}</button>
   </div>
   <footer id="footer"></footer>
 </main>
 <script nonce="{{NONCE}}">
 "use strict";
+const I18N = {{I18N}};
+const T = (key, vars) => (I18N["setup." + key] ?? I18N[key] ?? key).replace(/\{(\w+)\}/g, (m, k) => vars && k in vars ? String(vars[k]) : m);
 const base = location.pathname.endsWith("/") ? location.pathname : location.pathname + "/";
 const $ = (id) => document.getElementById(id);
 let state = null;
@@ -186,17 +203,24 @@ function fillForm(s) {
   $("auth").value = s.account.auth_type || "ntlm";
   $("proxy").value = s.account.proxy || "";
   if (s.account.proxy) document.querySelector("details").open = true;
-  $("password").placeholder = s.password_stored ? "сохранён — оставьте пустым, чтобы не менять" : "";
-  $("password-hint").textContent = s.password_stored ? "Пароль уже сохранён в связке ключей." : "";
+  $("password").placeholder = s.password_stored ? T("password_placeholder_stored") : "";
+  $("password-hint").textContent = s.password_stored ? T("password_stored_hint") : "";
+  fillLanguages(s);
   $("allow-send").checked = s.access.allow_send; $("domains").value = s.access.internal_domains; $("timeout").value = s.access.confirm_timeout;
+}
+
+function fillLanguages(s) {
+  const sel = $("lang");
+  sel.replaceChildren(sel.options[0], ...Object.entries(s.languages).map(([code, name]) => el("option", { value: code, lang: code }, name)));
+  sel.value = s.language || "";
 }
 
 function render(s) {
   state = s;
   const badge = $("badge");
-  badge.textContent = s.configured ? "Почта подключена" : "Не настроено";
+  badge.textContent = s.configured ? T("badge_ok") : T("badge_no");
   badge.className = "badge " + (s.configured ? "ok" : "no");
-  $("footer").textContent = `owa-mail-mcp ${s.version} · настройки: ${s.config_path}`;
+  $("footer").textContent = T("footer", { version: s.version, path: s.config_path });
   $("done-row").hidden = !s.standalone;
   renderCerts(s.trusted_certificates);
   renderClients(s);
@@ -204,10 +228,10 @@ function render(s) {
 }
 
 function renderCerts(list) {
-  $("certs").replaceChildren(...(list.length ? [el("div", { class: "hint", style: "margin-top:14px" }, "Доверенные сертификаты:"),
-    ...list.map(c => el("div", { class: "row", style: "display:flex;gap:8px;align-items:center;margin-top:4px" },
+  $("certs").replaceChildren(...(list.length ? [el("div", { class: "hint certs-title" }, T("trusted_certs")),
+    ...list.map(c => el("div", { class: "cert-row" },
       el("span", { class: "mono" }, `${c.key}  ${c.fingerprint.slice(0, 23)}…`),
-      el("button", { class: "small", onclick: async () => { await api("api/forget-certificate", { key: c.key }); refresh(); } }, "Забыть")))] : []));
+      el("button", { class: "small", onclick: async () => { await api("api/forget-certificate", { key: c.key }); refresh(); } }, T("forget"))))] : []));
 }
 
 function renderClients(s) {
@@ -216,29 +240,29 @@ function renderClients(s) {
     const inst = s.installers[sn.id];
     const msg = el("div", { class: "msg" });
     const copy = el("button", { class: "small", onclick: async () => {
-      try { await navigator.clipboard.writeText(sn.text); copy.textContent = "Скопировано"; }
-      catch { copy.textContent = "Не удалось"; }
-      setTimeout(() => copy.textContent = "Скопировать", 1500);
-    } }, "Скопировать");
+      try { await navigator.clipboard.writeText(sn.text); copy.textContent = T("copied"); }
+      catch { copy.textContent = T("copy_failed"); }
+      setTimeout(() => copy.textContent = T("copy"), 1500);
+    } }, T("copy"));
     const add = inst ? el("button", { class: "small primary", disabled: !inst.available, title: inst.available ? "" : inst.hint,
       onclick: async () => {
-        add.disabled = true; msg.className = "msg"; msg.textContent = "Добавляю…";
+        add.disabled = true; msg.className = "msg"; msg.textContent = T("adding");
         try { const r = await api("api/install", { target: sn.id }); msg.className = "msg " + (r.ok ? "ok" : "err"); msg.textContent = r.message; }
         catch (e) { msg.className = "msg err"; msg.textContent = String(e); }
         add.disabled = false;
-      } }, "Добавить") : null;
+      } }, T("add")) : null;
     return el("div", { class: "client" },
       el("div", { class: "row" }, el("span", { class: "title" }, sn.title), el("span", {}, add, " ", copy)),
       el("pre", { class: "code mono" }, sn.text),
-      inst && !inst.available ? el("div", { class: "hint" }, inst.hint + " — скопируйте строку вручную.") : null,
+      inst && !inst.available ? el("div", { class: "hint" }, T("copy_manually", { hint: inst.hint })) : null,
       msg);
   }));
 }
 
 function renderJournal(items) {
-  if (!items.length) { $("journal").replaceChildren(el("div", { class: "hint" }, "Пока пусто: ассистент ещё не обращался к почте.")); return; }
+  if (!items.length) { $("journal").replaceChildren(el("div", { class: "hint" }, T("journal_empty"))); return; }
   $("journal").replaceChildren(el("table", {}, items.slice(0, 15).map(e => el("tr", {},
-    el("td", { class: "t" }, new Date(e.time * 1000).toLocaleString()),
+    el("td", { class: "t" }, new Date(e.time * 1000).toLocaleString(document.documentElement.lang)),
     el("td", { class: e.error ? "e" : "k" }, e.error ? "✗" : "✓"),
     el("td", { class: "mono" }, e.tool),
     el("td", { class: "t" }, e.client || "")))));
@@ -250,31 +274,31 @@ function certCard(r, form) {
   const c = r.certificate;
   const changed = !!r.previous_fingerprint;
   return el("div", { class: "cert" },
-    el("h3", {}, changed ? "Сертификат сервера изменился" : "Система не доверяет сертификату сервера"),
+    el("h3", {}, changed ? T("cert_changed_title") : T("cert_untrusted_title")),
     el("div", {}, changed
-      ? "Раньше вы доверяли другому сертификату этого сервера. Это может быть плановая замена, а может быть перехват. Сверьте новый отпечаток с ИТ-отделом."
-      : `Так бывает, если сертификат выпущен внутренним центром сертификации компании (${c.system_error || "не проверен"}). Доверяйте ему, только если уверены, что это ваш сервер.`),
+      ? T("cert_changed_text")
+      : T("cert_untrusted_text", { error: c.system_error || T("cert_not_checked") })),
     el("dl", {},
-      el("dt", {}, "Сервер"), el("dd", {}, `${c.host}:${c.port}`),
-      el("dt", {}, "Выдан для"), el("dd", {}, c.subject || "—"),
-      el("dt", {}, "Кем выдан"), el("dd", {}, c.issuer || "—"),
-      el("dt", {}, "Действует до"), el("dd", {}, c.not_after || "—"),
-      c.names.length ? [el("dt", {}, "Имена"), el("dd", {}, c.names.join(", "))] : null,
-      changed ? [el("dt", {}, "Был SHA-256"), el("dd", { class: "mono" }, r.previous_fingerprint)] : null,
-      el("dt", {}, changed ? "Стал SHA-256" : "SHA-256"), el("dd", { class: "mono" }, c.fingerprint_display)),
+      el("dt", {}, T("cert_server")), el("dd", {}, `${c.host}:${c.port}`),
+      el("dt", {}, T("cert_subject")), el("dd", {}, c.subject || "—"),
+      el("dt", {}, T("cert_issuer")), el("dd", {}, c.issuer || "—"),
+      el("dt", {}, T("cert_valid_until")), el("dd", {}, c.not_after || "—"),
+      c.names.length ? [el("dt", {}, T("cert_names")), el("dd", {}, c.names.join(", "))] : null,
+      changed ? [el("dt", {}, T("cert_was")), el("dd", { class: "mono" }, r.previous_fingerprint)] : null,
+      el("dt", {}, changed ? T("cert_now") : "SHA-256"), el("dd", { class: "mono" }, c.fingerprint_display)),
     el("div", { class: "actions" },
       el("button", { class: "primary", onclick: async (ev) => {
         ev.target.disabled = true;
         const t = await api("api/trust", { server: form.server, fingerprint: c.fingerprint });
         if (t.ok) { await refresh(); runTest(); } else { ev.target.disabled = false; showResult(el("div", { class: "result err" }, t.error)); }
-      } }, "Доверять этому сертификату"),
-      el("button", { onclick: () => showResult(el("div", { class: "result info" }, "Сертификат не принят, подключение не выполнено.")) }, "Не доверять")));
+      } }, T("trust")),
+      el("button", { onclick: () => showResult(el("div", { class: "result info" }, T("cert_declined"))) }, T("dont_trust"))));
 }
 
 async function runTest() {
   const form = account();
   $("test").disabled = true; $("save").disabled = true;
-  showResult(el("div", { class: "result info" }, "Проверяю подключение… Это может занять до минуты."));
+  showResult(el("div", { class: "result info" }, T("testing")));
   let r;
   try { r = await api("api/test", form); } catch (e) { r = { ok: false, error: String(e) }; }
   $("test").disabled = false;
@@ -282,35 +306,34 @@ async function runTest() {
     testedKey = JSON.stringify(form);
     $("save").disabled = false;
     showResult(el("div", { class: "result ok" },
-      `Подключено: ${r.me.name ? r.me.name + " " : ""}<${r.me.email}>. Непрочитанных во «Входящих»: ${r.unread ?? "?"}.`,
+      T("connected", { who: r.me.name ? r.me.name + " " : "", email: r.me.email, unread: r.unread ?? "?" }),
       r.latest.length ? el("ul", {}, r.latest.map(m => el("li", {}, `${m.from}: ${m.subject}`))) : null));
   } else if (r.stage === "certificate") {
     showResult(certCard(r, form));
   } else if (r.stage === "legacy_tls") {
     showResult(el("div", { class: "cert" },
-      el("h3", {}, "Сервер использует устаревшие настройки защищённого соединения"),
-      el("div", {}, `${r.host}:${r.port} соединяется только с настройками TLS, которые браузеры ещё принимают, а современный OpenSSL по умолчанию отклоняет (${r.reason}). ` +
-        "Обычно так настроены старые Exchange или шлюзы перед ними. Можно разрешить их только для этого сервера: сертификат по-прежнему будет проверяться."),
+      el("h3", {}, T("legacy_title")),
+      el("div", {}, T("legacy_text", { host: r.host, port: r.port, reason: r.reason })),
       el("div", { class: "actions" },
         el("button", { class: "primary", onclick: async (ev) => {
           ev.target.disabled = true;
           const t = await api("api/allow-legacy-tls", { server: form.server });
           if (t.ok) runTest(); else { ev.target.disabled = false; showResult(el("div", { class: "result err" }, t.error)); }
-        } }, "Разрешить для этого сервера"),
-        el("button", { onclick: () => showResult(el("div", { class: "result info" }, "Не разрешено, подключение не выполнено.")) }, "Отмена"))));
+        } }, T("legacy_allow")),
+        el("button", { onclick: () => showResult(el("div", { class: "result info" }, T("legacy_declined"))) }, T("cancel")))));
   } else {
     const d = r.diagnosis;
     const report = d ? [d.summary, "", ...d.details.map(x => "- " + x)].join("\n") : "";
     const copyBtn = d ? el("button", { class: "small", onclick: async () => {
-      try { await navigator.clipboard.writeText(report); copyBtn.textContent = "Скопировано"; } catch { copyBtn.textContent = "Не удалось"; }
-    } }, "Скопировать диагностику") : null;
+      try { await navigator.clipboard.writeText(report); copyBtn.textContent = T("copied"); } catch { copyBtn.textContent = T("copy_failed"); }
+    } }, T("copy_diag")) : null;
     showResult(el("div", { class: "result err" },
-      d ? el("div", { style: "font-weight:600" }, d.summary) : (r.error || "Ошибка"),
-      d ? el("div", { class: "hint" }, "Сообщение библиотеки: " + r.error) : null,
-      r.detail ? el("div", { class: "hint" }, "Ответ системы: " + r.detail) : null,
-      d && d.details.length ? el("details", {}, el("summary", {}, "Что ответил сервер"),
-        el("pre", { class: "code mono", style: "color:var(--text)" }, d.details.join("\n\n"))) : null,
-      copyBtn ? el("div", { class: "actions", style: "margin-top:8px" }, copyBtn) : null));
+      d ? el("div", { class: "strong" }, d.summary) : (r.error || T("error")),
+      d ? el("div", { class: "hint" }, T("lib_message", { text: r.error })) : null,
+      r.detail ? el("div", { class: "hint" }, T("system_answer", { text: r.detail })) : null,
+      d && d.details.length ? el("details", {}, el("summary", {}, T("server_said")),
+        el("pre", { class: "code mono plain-text" }, d.details.join("\n\n"))) : null,
+      copyBtn ? el("div", { class: "actions tight" }, copyBtn) : null));
   }
 }
 
@@ -340,9 +363,10 @@ $("test").addEventListener("click", runTest);
 $("save").addEventListener("click", saveAccount);
 for (const id of ["server", "email", "username", "password", "auth", "proxy"]) $(id).addEventListener("input", () => { $("save").disabled = accountKey() !== testedKey; });
 $("allow-send").addEventListener("change", saveAccessSoon);
+$("lang").addEventListener("change", async () => { await api("api/language", { language: $("lang").value }); location.reload(); });
 $("domains").addEventListener("input", saveAccessSoon);
 $("timeout").addEventListener("input", saveAccessSoon);
-$("done").addEventListener("click", async () => { await api("api/done", {}); document.body.replaceChildren(el("main", {}, el("div", { class: "card" }, el("h2", {}, "Готово"), el("p", { class: "lead" }, "Вкладку можно закрыть. Чтобы изменить настройки, запустите owa-mail-mcp setup.")))); });
+$("done").addEventListener("click", async () => { await api("api/done", {}); document.body.replaceChildren(el("main", {}, el("div", { class: "card" }, el("h2", {}, T("done")), el("p", { class: "lead" }, T("done_text"))))); });
 refresh(true);
 setInterval(async () => { try { renderJournal((await api("api/journal")).journal); } catch {} }, 5000);
 </script>

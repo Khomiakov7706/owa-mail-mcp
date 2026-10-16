@@ -14,7 +14,8 @@ from typing import Any
 from .confirm import ConfirmationBroker
 from .models import Outgoing
 from .safety import clean_addresses
-from .web import LocalWebApp, load_page
+from .i18n import current_language, render_page, t
+from .web import LocalWebApp
 
 
 class ConfirmationUI:
@@ -22,7 +23,7 @@ class ConfirmationUI:
         self.broker = broker
         self._open_browser = open_browser
         self._lock = threading.Lock()
-        self._app = LocalWebApp(load_page("confirm_page.html"), host=host, port=port)
+        self._app = LocalWebApp(lambda: render_page("confirm_page.html", current_language()), host=host, port=port)
         self._app.get("api/pending", lambda: (200, {"items": broker.snapshot()}))
         self._app.post("api/decide", self._decide)
 
@@ -50,9 +51,9 @@ class ConfirmationUI:
             if self.broker.ui_seen_within(4):
                 return True  # already open: it polls every second and shows the new card
             if not self._open_browser:
-                print(f"owa-mail-mcp: confirm the message at {self.url}", file=sys.stderr, flush=True)
+                print(f"owa-mail-mcp: {t('cli.confirm_open')}: {self.url}", file=sys.stderr, flush=True)
                 return True
-            return self._app.open_in_browser("open this address to confirm the message")
+            return self._app.open_in_browser(t("cli.confirm_open"))
 
     def _decide(self, data: dict[str, Any]) -> tuple[int, Any]:
         proposal_id = str(data["id"])
@@ -64,10 +65,10 @@ class ConfirmationUI:
             try:
                 edited = _edited_message(self.broker, proposal_id, data["edits"])
             except KeyError:
-                return 404, {"error": "This message is no longer waiting."}
+                return 404, {"error": "This message is no longer waiting.", "code": "gone"}
         error = self.broker.decide(proposal_id, action == "approve", edited)
         if error:
-            return 409, {"error": error}
+            return 409, {"error": error, "code": getattr(error, "code", ""), "params": getattr(error, "params", {})}
         return 200, {"ok": True}
 
 

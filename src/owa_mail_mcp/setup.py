@@ -19,9 +19,10 @@ from typing import Any, Callable
 from . import __version__
 from .backend import AuthenticationError, BackendError, SearchQuery
 from .config import KeyringUnavailable, Settings, config_path, get_password, save_settings, set_password
+from .i18n import LANGUAGES, current_language, normalize, render_page, t
 from .runtime import read_journal
 from .tls import LegacyTLSRequired, ServerUnreachable, apply_transport_settings, format_fingerprint, host_port, pin_key, probe
-from .web import LocalWebApp, load_page
+from .web import LocalWebApp
 
 SERVER_NAME = "owa-mail"
 _AUTH_TYPES = ("ntlm", "basic", "kerberos")
@@ -45,7 +46,7 @@ def _shell_quote(arg: str) -> str:
     return '"' + arg.replace('"', '\\"') + '"'
 
 
-def snippets(command: str, args: list[str]) -> list[dict[str, str]]:
+def snippets(command: str, args: list[str], lang: str | None = None) -> list[dict[str, str]]:
     cmdline = " ".join(_shell_quote(a) for a in [command, *args])
     entry: dict[str, Any] = {"command": command}
     if args:
@@ -59,7 +60,7 @@ def snippets(command: str, args: list[str]) -> list[dict[str, str]]:
         {"id": "opencode", "title": "OpenCode", "kind": "json", "text": json.dumps(
             {"$schema": "https://opencode.ai/config.json", "mcp": {SERVER_NAME: opencode_entry(command, args)}}, indent=2, ensure_ascii=False)},
         {"id": "kilo", "title": "Kilo Code", "kind": "json", "text": json.dumps({"mcp": {SERVER_NAME: opencode_entry(command, args)}}, indent=2, ensure_ascii=False)},
-        {"id": "kilo-legacy", "title": "Kilo Code (старые версии, mcp_settings.json)", "kind": "json", "text": json.dumps(
+        {"id": "kilo-legacy", "title": t("msg.kilo_legacy_title", lang), "kind": "json", "text": json.dumps(
             {"mcpServers": {SERVER_NAME: {**entry, "args": list(args), "disabled": False, "alwaysAllow": []}}}, indent=2, ensure_ascii=False)},
     ]
 
@@ -119,7 +120,7 @@ class SetupApp:
         self._probe = prober
         self._diagnoser = diagnoser if diagnoser is not None else (_ews_diagnosis if backend_factory is None else None)
         self._lock = threading.Lock()
-        self.app = LocalWebApp(load_page("setup_page.html"), host=host, port=port)
+        self.app = LocalWebApp(lambda: render_page("setup_page.html", current_language()), host=host, port=port)
         self.app.get("api/state", lambda: (200, self.state()))
         self.app.get("api/journal", lambda: (200, {"journal": read_journal(20)}))
         self.app.post("api/test", self.test_connection)
@@ -130,6 +131,7 @@ class SetupApp:
         self.app.post("api/access", self.save_access)
         self.app.post("api/install", self.install)
         self.app.post("api/done", self.done)
+        self.app.post("api/language", self.save_language)
 
     @property
     def url(self) -> str:
@@ -145,6 +147,7 @@ class SetupApp:
 
     def state(self) -> dict[str, Any]:
         settings = Settings.load(with_password=False)
+        lang = current_language(settings)
         stored = bool(get_password(settings.login)) if settings.login else False
         command, args = server_command()
         return {
@@ -167,26 +170,31 @@ class SetupApp:
             "trusted_certificates": [{"key": k, "fingerprint": format_fingerprint(v)} for k, v in settings.trusted_certificates.items()],
             "config_path": str(config_path()),
             "command": [command, *args],
-            "snippets": snippets(command, args),
-            "installers": self._installers(),
+            "snippets": snippets(command, args, lang),
+            "installers": self._installers(lang),
+            "language": normalize(settings.language) or "",
+            "languages": LANGUAGES,
             "journal": read_journal(20),
             "standalone": self._on_done is not None,
         }
 
-    def _installers(self) -> dict[str, dict[str, Any]]:
+    def _installers(self, lang: str) -> dict[str, dict[str, Any]]:
+        missing = lambda cmd: t("msg.hint_cli_missing", lang, cmd=cmd)  # noqa: E731
+        absent = lambda app: t("msg.hint_not_installed", lang, app=app)  # noqa: E731
         return {
-            "claude-code": {"available": bool(shutil.which("claude")), "hint": "команда claude не найдена"},
-            "codex": {"available": bool(shutil.which("codex")), "hint": "команда codex не найдена"},
-            "claude-desktop": {"available": claude_desktop_config().parent.exists(), "hint": "Claude Desktop не установлен"},
-            "cursor": {"available": cursor_config().parent.exists(), "hint": "Cursor не установлен"},
-            "opencode": {"available": bool(shutil.which("opencode")) or opencode_config().parent.exists(), "hint": "OpenCode не установлен"},
-            "kilo": {"available": bool(shutil.which("kilo")) or kilo_config().parent.exists(), "hint": "Kilo Code (новая версия) не найден"},
+            "claude-code": {"available": bool(shutil.which("claude")), "hint": missing("claude")},
+            "codex": {"available": bool(shutil.which("codex")), "hint": missing("codex")},
+            "claude-desktop": {"available": claude_desktop_config().parent.exists(), "hint": absent("Claude Desktop")},
+            "cursor": {"available": cursor_config().parent.exists(), "hint": absent("Cursor")},
+            "opencode": {"available": bool(shutil.which("opencode")) or opencode_config().parent.exists(), "hint": absent("OpenCode")},
+            "kilo": {"available": bool(shutil.which("kilo")) or kilo_config().parent.exists(), "hint": t("msg.hint_kilo_missing", lang)},
         }
 
     # --- account -----------------------------------------------------------------------------
 
     def _account_from(self, data: dict[str, Any]) -> tuple[Settings, str | None]:
         saved = Settings.load(with_password=False)
+        lang = current_language(saved)
         server = str(data.get("server") or "").strip()
         email = str(data.get("email") or "").strip()
         username = str(data.get("username") or "").strip() or None
@@ -194,30 +202,31 @@ class SetupApp:
         if auth not in _AUTH_TYPES:
             auth = "ntlm"
         if not server or not email:
-            return saved, "Укажите адрес сервера и почту."
+            return saved, t("msg.enter_server_email", lang)
         if "@" not in email:
-            return saved, "Почта должна выглядеть как name@company.com."
+            return saved, t("msg.email_format", lang)
         if server.lower().startswith("http://"):
-            return saved, "Нужен https: по http пароль не отправляется."
+            return saved, t("msg.https_needed", lang)
         proxy = str(data.get("proxy") or "").strip() or None
         if proxy and not re.match(r"^(https?://)?[\w.-]+:\d{1,5}/?$", proxy):
-            return saved, "Прокси указывается как host:port, например proxy.company.com:3128."
+            return saved, t("msg.proxy_format", lang)
         settings = replace(saved, backend="ews", server=server, email=email, username=username, auth_type=auth, password=None, proxy=proxy)
         password = str(data.get("password") or "")
         if not password:
             # An empty field means the stored password, but only for the login it was stored for.
             password = get_password(settings.login) or ""
             if not password:
-                return settings, "Введите пароль."
+                return settings, t("msg.enter_password", lang)
         return replace(settings, password=password), None
 
     def test_connection(self, data: dict[str, Any]) -> tuple[int, Any]:
         settings, error = self._account_from(data)
+        lang = current_language(settings)
         if error:
             return 200, {"ok": False, "stage": "input", "error": error}
         host, port = host_port(settings.server or "")
         if not host:
-            return 200, {"ok": False, "stage": "input", "error": "Не удалось разобрать адрес сервера."}
+            return 200, {"ok": False, "stage": "input", "error": t("msg.bad_server", lang)}
 
         key = pin_key(host, port)
         apply_transport_settings(settings)
@@ -226,7 +235,7 @@ class SetupApp:
         except LegacyTLSRequired as exc:
             return 200, {"ok": False, "stage": "legacy_tls", "host": host, "port": port, "reason": exc.reason}
         except ServerUnreachable as exc:
-            return 200, {"ok": False, "stage": "network", "error": network_message(host, port, exc), "detail": exc.reason}
+            return 200, {"ok": False, "stage": "network", "error": network_message(host, port, exc, lang), "detail": exc.reason}
         pinned = settings.trusted_certificates.get(key)
         if pinned and pinned != cert.fingerprint:
             return 200, {"ok": False, "stage": "certificate", "certificate": cert.to_dict(), "previous_fingerprint": format_fingerprint(pinned)}
@@ -239,11 +248,11 @@ class SetupApp:
             unread = backend.unread_count()
             latest = backend.search(SearchQuery(folder="inbox", limit=3)).messages
         except AuthenticationError:
-            return 200, {"ok": False, "stage": "auth", "error": "Exchange не принял логин или пароль. Проверьте их; для входа Windows логин пишется как DOMAIN\\login."}
+            return 200, {"ok": False, "stage": "auth", "error": t("msg.auth_failed", lang)}
         except BackendError as exc:
-            return 200, {"ok": False, "stage": "exchange", "error": str(exc), "diagnosis": self._diagnose(settings)}
+            return 200, {"ok": False, "stage": "exchange", "error": str(exc), "diagnosis": self._diagnose(settings, lang)}
         except Exception as exc:  # exchangelib can raise its own types on odd servers
-            return 200, {"ok": False, "stage": "exchange", "error": f"{type(exc).__name__}: {exc}", "diagnosis": self._diagnose(settings)}
+            return 200, {"ok": False, "stage": "exchange", "error": f"{type(exc).__name__}: {exc}", "diagnosis": self._diagnose(settings, lang)}
         return 200, {
             "ok": True,
             "me": me.to_dict(),
@@ -254,25 +263,26 @@ class SetupApp:
             ],
         }
 
-    def _diagnose(self, settings: Settings) -> dict[str, Any] | None:
+    def _diagnose(self, settings: Settings, lang: str) -> dict[str, Any] | None:
         if self._diagnoser is None:
             return None
         try:
             return self._diagnoser(settings).to_dict()
         except Exception as exc:
-            return {"summary": f"Диагностика не удалась: {type(exc).__name__}: {exc}", "details": []}
+            return {"summary": t("msg.diag_failed", lang, error=f"{type(exc).__name__}: {exc}"), "details": []}
 
     def trust_certificate(self, data: dict[str, Any]) -> tuple[int, Any]:
         server = str(data.get("server") or "").strip()
         expected = str(data.get("fingerprint") or "").replace(":", "").lower()
         host, port = host_port(server)
+        lang = current_language()
         try:
             cert = self._probe(host, port)
         except ServerUnreachable as exc:
-            return 200, {"ok": False, "error": str(exc)}
+            return 200, {"ok": False, "error": network_message(host, port, exc, lang)}
         # Trust exactly what the user looked at: if the server now shows another one, ask again.
         if cert.fingerprint != expected:
-            return 200, {"ok": False, "error": "Сервер прислал другой сертификат, чем показан. Проверьте подключение ещё раз.", "certificate": cert.to_dict()}
+            return 200, {"ok": False, "error": t("msg.cert_changed_retry", lang), "certificate": cert.to_dict()}
         with self._lock:
             settings = Settings.load(with_password=False)
             pins = {**settings.trusted_certificates, pin_key(host, port): cert.fingerprint}
@@ -282,7 +292,7 @@ class SetupApp:
     def allow_legacy_tls(self, data: dict[str, Any]) -> tuple[int, Any]:
         host, port = host_port(str(data.get("server") or ""))
         if not host:
-            return 200, {"ok": False, "error": "Не удалось разобрать адрес сервера."}
+            return 200, {"ok": False, "error": t("msg.bad_server")}
         key = pin_key(host, port)
         with self._lock:
             settings = Settings.load(with_password=False)
@@ -308,7 +318,7 @@ class SetupApp:
                 try:
                     set_password(settings.login or "", typed)
                 except KeyringUnavailable as exc:
-                    return 200, {"ok": False, "error": str(exc)}
+                    return 200, {"ok": False, "error": t("msg.keyring_unavailable", error=str(exc.__cause__ or exc))}
             save_settings(replace(settings, password=None))
         return 200, {"ok": True}
 
@@ -324,28 +334,36 @@ class SetupApp:
             save_settings(replace(settings, allow_send=bool(data.get("allow_send")), internal_domains=domains, confirm_timeout=timeout))
         return 200, {"ok": True}
 
+    def save_language(self, data: dict[str, Any]) -> tuple[int, Any]:
+        language = normalize(str(data.get("language") or ""))
+        with self._lock:
+            settings = Settings.load(with_password=False)
+            save_settings(replace(settings, language=language))
+        return 200, {"ok": True}
+
     # --- clients -----------------------------------------------------------------------------
 
     def install(self, data: dict[str, Any]) -> tuple[int, Any]:
         target = str(data.get("target") or "")
         command, args = server_command()
+        lang = current_language()
         try:
             if target == "claude-code":
-                return 200, _run_cli(["claude", "mcp", "add", "--scope", "user", SERVER_NAME, "--", command, *args], "Claude Code")
+                return 200, _run_cli(["claude", "mcp", "add", "--scope", "user", SERVER_NAME, "--", command, *args], "Claude Code", lang)
             if target == "codex":
-                return 200, _run_cli(["codex", "mcp", "add", SERVER_NAME, "--", command, *args], "Codex")
+                return 200, _run_cli(["codex", "mcp", "add", SERVER_NAME, "--", command, *args], "Codex", lang)
             if target == "claude-desktop":
-                path = _merge_json(claude_desktop_config(), "mcpServers", _plain_entry(command, args))
-                return 200, {"ok": True, "message": f"Записано в {path}. Перезапустите Claude Desktop."}
+                path = _merge_json(claude_desktop_config(), "mcpServers", _plain_entry(command, args), lang=lang)
+                return 200, {"ok": True, "message": t("msg.written_claude_desktop", lang, path=path)}
             if target == "cursor":
-                path = _merge_json(cursor_config(), "mcpServers", _plain_entry(command, args))
-                return 200, {"ok": True, "message": f"Записано в {path}. Cursor подхватит сервер сам или после перезапуска."}
+                path = _merge_json(cursor_config(), "mcpServers", _plain_entry(command, args), lang=lang)
+                return 200, {"ok": True, "message": t("msg.written_cursor", lang, path=path)}
             if target == "opencode":
-                path = _merge_json(opencode_config(), "mcp", opencode_entry(command, args), schema="https://opencode.ai/config.json")
-                return 200, {"ok": True, "message": f"Записано в {path}. Перезапустите OpenCode; проверка: opencode mcp list."}
+                path = _merge_json(opencode_config(), "mcp", opencode_entry(command, args), schema="https://opencode.ai/config.json", lang=lang)
+                return 200, {"ok": True, "message": t("msg.written_opencode", lang, path=path)}
             if target == "kilo":
-                path = _merge_json(kilo_config(), "mcp", opencode_entry(command, args))
-                return 200, {"ok": True, "message": f"Записано в {path}. Перезапустите Kilo Code (в VS Code: Reload Window)."}
+                path = _merge_json(kilo_config(), "mcp", opencode_entry(command, args), lang=lang)
+                return 200, {"ok": True, "message": t("msg.written_kilo", lang, path=path)}
         except (OSError, ValueError) as exc:
             return 200, {"ok": False, "message": str(exc)}
         return 400, {"ok": False, "message": "unknown target"}
@@ -362,21 +380,18 @@ def _ews_backend(settings: Settings):
     return EWSBackend(settings)
 
 
-def network_message(host: str, port: int, exc: ServerUnreachable) -> str:
+def network_message(host: str, port: int, exc: ServerUnreachable, lang: str | None = None) -> str:
     if exc.kind == "dns":
-        return (f"Имя {host} не находится в DNS. Проверьте, что адрес совпадает с адресом веб-почты в браузере. "
-                "Если VPN включён, переподключите его: иногда система не сразу подхватывает DNS-серверы VPN.")
+        return t("msg.net_dns", lang, host=host)
     if exc.kind == "proxy":
-        return f"Прокси {exc.proxy} не пропустил соединение с {host}:{port}: {exc.reason}. Проверьте адрес прокси в разделе «Дополнительно»."
+        return t("msg.net_proxy", lang, proxy=exc.proxy, host=host, port=port, reason=exc.reason)
     if exc.kind == "tls":
-        return f"Защищённое соединение с {host}:{port} не установилось: {exc.reason}."
-    hint = system_proxy_hint()
-    return (f"Не удаётся соединиться с {host}:{port} ({exc.reason}). Если браузер при этом открывает почту, он идёт "
-            "другим путём, чаще всего через прокси." + (" " + hint if hint else
-            " Посмотрите адрес прокси в настройках сети или спросите ИТ и укажите его в разделе «Дополнительно» → «Прокси»."))
+        return t("msg.net_tls", lang, host=host, port=port, reason=exc.reason)
+    hint = system_proxy_hint(lang)
+    return t("msg.net_connect", lang, host=host, port=port, reason=exc.reason) + " " + (hint or t("msg.net_proxy_hint", lang))
 
 
-def system_proxy_hint() -> str:
+def system_proxy_hint(lang: str | None = None) -> str:
     """On macOS, says when the system uses a proxy auto-config script, which this program does not read."""
     if sys.platform != "darwin":
         return ""
@@ -386,11 +401,9 @@ def system_proxy_hint() -> str:
         return ""
     pac = re.search(r"ProxyAutoConfigURLString\s*:\s*(\S+)", out)
     if re.search(r"ProxyAutoConfigEnable\s*:\s*1", out):
-        where = f" ({pac.group(1)})" if pac else ""
-        return (f"В системе включена автоматическая настройка прокси (PAC){where}; её программа не читает. "
-                "Узнайте у ИТ адрес прокси для веб-почты (или найдите его в PAC-файле) и укажите в «Дополнительно» → «Прокси».")
+        return t("msg.proxy_pac", lang, where=f" ({pac.group(1)})" if pac else "")
     if re.search(r"ProxyAutoDiscoveryEnable\s*:\s*1", out):
-        return "В системе включено автообнаружение прокси (WPAD); его программа не использует. Укажите прокси вручную в «Дополнительно» → «Прокси»."
+        return t("msg.proxy_wpad", lang)
     return ""
 
 
@@ -401,20 +414,20 @@ def _ews_diagnosis(settings: Settings):
     return diagnose(settings, ews_endpoint(settings.server or ""))
 
 
-def _run_cli(argv: list[str], title: str) -> dict[str, Any]:
+def _run_cli(argv: list[str], title: str, lang: str | None = None) -> dict[str, Any]:
     exe = shutil.which(argv[0])
     if not exe:
-        return {"ok": False, "message": f"{title}: команда {argv[0]} не найдена в PATH. Скопируйте команду и выполните её сами."}
+        return {"ok": False, "message": t("msg.cli_not_found", lang, title=title, cmd=argv[0])}
     try:
         proc = subprocess.run([exe, *argv[1:]], capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return {"ok": False, "message": f"{title}: {exc}"}
     output = (proc.stdout + proc.stderr).strip()
     if proc.returncode == 0:
-        return {"ok": True, "message": f"Добавлено в {title}." + (f" {output[:300]}" if output else "")}
+        return {"ok": True, "message": t("msg.cli_added", lang, title=title) + (f" {output[:300]}" if output else "")}
     if "already exists" in output.lower():
-        return {"ok": True, "message": f"В {title} сервер {SERVER_NAME} уже подключён."}
-    return {"ok": False, "message": f"{title}: {output[:500] or f'код выхода {proc.returncode}'}"}
+        return {"ok": True, "message": t("msg.cli_exists", lang, title=title, name=SERVER_NAME)}
+    return {"ok": False, "message": f"{title}: {output[:500] or t('msg.cli_exit_code', lang, code=proc.returncode)}"}
 
 
 def _plain_entry(command: str, args: list[str]) -> dict[str, Any]:
@@ -424,7 +437,7 @@ def _plain_entry(command: str, args: list[str]) -> dict[str, Any]:
     return entry
 
 
-def _merge_json(path: Path, key: str, entry: dict[str, Any], schema: str | None = None) -> Path:
+def _merge_json(path: Path, key: str, entry: dict[str, Any], schema: str | None = None, lang: str | None = None) -> Path:
     """Adds the server under `key`, keeping everything else. A file that is not plain JSON (a
     .jsonc with comments, a broken one) is reported and never rewritten: comments would be lost."""
     data: dict[str, Any] = {}
@@ -434,12 +447,9 @@ def _merge_json(path: Path, key: str, entry: dict[str, Any], schema: str | None 
             try:
                 data = json.loads(text)
             except ValueError as exc:
-                raise ValueError(
-                    f"{path} не удалось разобрать как JSON (возможно, в нём комментарии). "
-                    "Чтобы ничего не потерять, файл не изменён: добавьте строки из окна вручную."
-                ) from exc
+                raise ValueError(t("msg.json_unparsable", lang, path=path)) from exc
             if not isinstance(data, dict):
-                raise ValueError(f"{path} is not a JSON object")
+                raise ValueError(t("msg.json_not_object", lang, path=path))
         shutil.copy2(path, path.with_suffix(path.suffix + ".bak"))
     elif schema:
         data["$schema"] = schema
@@ -454,10 +464,10 @@ def run_setup(open_browser: bool = True) -> None:
     finished = threading.Event()
     app = SetupApp(on_done=finished.set)
     app.start()
-    print(f"OWA Mail MCP setup: {app.url}", file=sys.stderr, flush=True)
+    print(t("cli.setup_url", url=app.url), file=sys.stderr, flush=True)
     if open_browser:
-        app.app.open_in_browser("open this address to set up OWA Mail MCP")
-    print("Press Ctrl+C to stop.", file=sys.stderr, flush=True)
+        app.app.open_in_browser(t("cli.setup_open"))
+    print(t("cli.ctrl_c"), file=sys.stderr, flush=True)
     try:
         finished.wait()
     except KeyboardInterrupt:

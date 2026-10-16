@@ -17,6 +17,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from .config import Settings
+from .i18n import current_language, t
 from .tls import PinningAdapter, apply_transport_settings, host_port
 
 _EXCHANGE_HEADERS = ("X-OWA-Version", "X-FEServer", "X-BEServer", "X-CalculatedBETarget", "X-DiagInfo", "request-id", "X-Powered-By")
@@ -46,32 +47,34 @@ class Probe:
     server: str | None = None
     ews_version: str | None = None
     soap_fault: str | None = None
+    lang: str | None = field(default=None, repr=False)
 
     def to_dict(self) -> dict[str, Any]:
-        return {k: v for k, v in self.__dict__.items() if v not in (None, [], {})}
+        return {k: v for k, v in self.__dict__.items() if v not in (None, [], {}) and k != "lang"}
 
     def line(self) -> str:
+        lang = self.lang
         parts = [f"{self.label}: {self.url}"]
         if self.error:
-            parts.append(f"ошибка: {self.error}")
+            parts.append(t("diag.error", lang, text=self.error))
         if self.status is not None:
             parts.append(f"HTTP {self.status}")
         if self.redirects:
-            parts.append("перенаправления: " + " → ".join(self.redirects))
+            parts.append(t("diag.redirects", lang, list=" → ".join(self.redirects)))
         if self.stopped_at_foreign_host:
-            parts.append(f"уводит на другой хост {self.stopped_at_foreign_host} (туда пароль не отправлялся)")
+            parts.append(t("diag.foreign_host", lang, host=self.stopped_at_foreign_host))
         if self.auth_schemes:
-            parts.append("способы входа: " + ", ".join(self.auth_schemes))
+            parts.append(t("diag.auth_schemes", lang, list=", ".join(self.auth_schemes)))
         if self.content_type:
-            parts.append(f"тип: {self.content_type}")
+            parts.append(t("diag.type", lang, type=self.content_type))
         if self.title:
-            parts.append(f"страница: «{self.title}»")
+            parts.append(t("diag.page", lang, title=self.title))
         if self.ews_version:
             parts.append(f"EWS: {self.ews_version}")
         if self.soap_fault:
-            parts.append(f"ошибка EWS: {self.soap_fault}")
+            parts.append(t("diag.ews_error", lang, text=self.soap_fault))
         if self.exchange:
-            parts.append("заголовки Exchange: " + ", ".join(f"{k}={v}" for k, v in self.exchange.items()))
+            parts.append(t("diag.exchange_headers", lang, list=", ".join(f"{k}={v}" for k, v in self.exchange.items())))
         if self.server:
             parts.append(f"Server: {self.server}")
         return "; ".join(parts)
@@ -110,8 +113,9 @@ def _auth(settings: Settings):
     return None  # Kerberos and others: probed without credentials
 
 
-def _probe(session: requests.Session, label: str, url: str, *, method: str = "GET", auth=None, data: str | None = None) -> Probe:
-    probe = Probe(label=label, url=url)
+def _probe(session: requests.Session, label: str, url: str, *, method: str = "GET", auth=None, data: str | None = None,
+           lang: str | None = None) -> Probe:
+    probe = Probe(label=label, url=url, lang=lang)
     home = urlparse(url).hostname
     current = url
     headers = {"Content-Type": "text/xml; charset=utf-8"} if data else {}
@@ -120,7 +124,7 @@ def _probe(session: requests.Session, label: str, url: str, *, method: str = "GE
             resp = session.request(method, current, auth=auth if urlparse(current).hostname == home else None,
                                    data=data, headers=headers, allow_redirects=False, timeout=20)
         except requests.exceptions.SSLError as exc:
-            probe.error = "сертификат не принят: " + _short(exc)
+            probe.error = t("diag.cert_rejected", lang, text=_short(exc))
             return probe
         except requests.RequestException as exc:
             probe.error = _short(exc)
@@ -176,23 +180,25 @@ def _short(exc: Exception) -> str:
     return (reason.group(1) if reason else text)[:200]
 
 
-def diagnose(settings: Settings, ews_url: str) -> Diagnosis:
+def diagnose(settings: Settings, ews_url: str, lang: str | None = None) -> Diagnosis:
+    lang = lang or current_language(settings)
     host, port = host_port(settings.server or "")
     base = f"https://{host}" + (f":{port}" if port != 443 else "")
     session = _session(settings)
-    anonymous = _probe(session, "EWS без входа", ews_url)
-    signed_in = _probe(session, "EWS со входом", ews_url, method="POST", auth=_auth(settings), data=_SOAP_GET_FOLDER) if _auth(settings) else None
-    owa = _probe(session, "OWA", base + "/owa/")
+    anonymous = _probe(session, t("diag.ews_anonymous", lang), ews_url, lang=lang)
+    signed_in = _probe(session, t("diag.ews_signed_in", lang), ews_url, method="POST", auth=_auth(settings), data=_SOAP_GET_FOLDER,
+                       lang=lang) if _auth(settings) else None
+    owa = _probe(session, "OWA", base + "/owa/", lang=lang)
     warmed = None
     if _auth(settings) and signed_in and signed_in.error:
         # Sign in through OWA first, then EWS on the same (authenticated) connection.
         fresh = _session(settings)
-        owa_signin = _probe(fresh, "Вход в OWA", base + "/owa/", auth=_auth(settings))
-        warmed = _probe(fresh, "EWS после входа в OWA", ews_url, method="POST", auth=_auth(settings), data=_SOAP_GET_FOLDER)
+        owa_signin = _probe(fresh, t("diag.owa_signin", lang), base + "/owa/", auth=_auth(settings), lang=lang)
+        warmed = _probe(fresh, t("diag.ews_after_owa", lang), ews_url, method="POST", auth=_auth(settings), data=_SOAP_GET_FOLDER, lang=lang)
         probes = [p for p in (anonymous, signed_in, owa, owa_signin, warmed) if p]
     else:
         probes = [p for p in (anonymous, signed_in, owa) if p]
-    return Diagnosis(summary=explain(anonymous, signed_in, owa, settings, warmed), probes=probes)
+    return Diagnosis(summary=explain(anonymous, signed_in, owa, settings, warmed, lang=lang), probes=probes)
 
 
 def _looks_like_login(p: Probe) -> bool:
@@ -204,48 +210,42 @@ def _owa_alive(p: Probe) -> bool:
     return bool(p.exchange.get("X-OWA-Version") or "/owa/auth" in " ".join(p.redirects).lower() or (p.status in (200, 401) and not p.error))
 
 
-def explain(anonymous: Probe, signed_in: Probe | None, owa: Probe, settings: Settings, warmed: Probe | None = None) -> str:
+def explain(anonymous: Probe, signed_in: Probe | None, owa: Probe, settings: Settings, warmed: Probe | None = None,
+            lang: str | None = None) -> str:
+    lang = lang or current_language(settings)
     ews = signed_in or anonymous
     if warmed is not None and ews.error:
         if warmed.ews_version and warmed.status == 200:
-            return (f"EWS работает (Exchange {warmed.ews_version}), но только на соединении, которое сначала вошло в OWA: "
-                    "запросы к EWS на новом соединении сервер обрывает. Программа делает такой вход сама — "
-                    "обновите её и проверьте подключение ещё раз.")
+            return t("diag.warmed_ok", lang, version=warmed.ews_version)
         if warmed.ews_version:
-            return f"После входа в OWA EWS отвечает (Exchange {warmed.ews_version}), но с ошибкой: {warmed.soap_fault or 'HTTP ' + str(warmed.status)}."
+            return t("diag.warmed_error", lang, version=warmed.ews_version, error=warmed.soap_fault or f"HTTP {warmed.status}")
         if warmed.status == 401:
-            return "После входа в OWA EWS просит войти снова и не принимает логин и пароль. Проверьте их; для входа Windows логин пишется как DOMAIN\\login."
+            return t("diag.warmed_401", lang)
         if warmed.error:
-            return ("Сервер обрывает соединение на адресе EWS даже после входа в OWA: EWS закрыт для внешних подключений "
-                    "(веб-почта при этом работает). Спросите ИТ, можно ли открыть EWS для вашей учётной записи; "
-                    "иначе нужен режим работы через веб-почту.")
+            return t("diag.warmed_dropped", lang)
     if anonymous.error and owa.error:
-        return "Сервер не отвечает ни на EWS, ни на OWA. Проверьте адрес и VPN."
+        return t("diag.no_answer", lang)
     if signed_in and signed_in.ews_version:
         if signed_in.status == 200:
-            return (f"EWS работает (Exchange {signed_in.ews_version}) и принял вход. Если проверка всё равно не проходит, "
-                    "пришлите эту диагностику разработчику.")
-        return f"EWS отвечает (Exchange {signed_in.ews_version}), но вернул ошибку: {signed_in.soap_fault or 'HTTP ' + str(signed_in.status)}."
+            return t("diag.works", lang, version=signed_in.ews_version)
+        return t("diag.ews_fault", lang, version=signed_in.ews_version, error=signed_in.soap_fault or f"HTTP {signed_in.status}")
     if ews.stopped_at_foreign_host or _looks_like_login(ews):
         where = ews.stopped_at_foreign_host or (ews.redirects[-1] if ews.redirects else None) \
-            or (f"страницу «{ews.title}»" if ews.title else "страницу входа")
-        return (f"Адрес EWS закрыт шлюзом с веб-входом: запрос уводит на {where}. Так бывает, когда снаружи компания "
-                "публикует только веб-почту (OWA), а EWS доступен лишь из корпоративной сети. Попробуйте с включённым VPN; "
-                "если не поможет, спросите ИТ, доступен ли EWS (/EWS/Exchange.asmx) и по какому адресу.")
+            or (t("diag.where_page", lang, title=ews.title) if ews.title else t("diag.where_login", lang))
+        return t("diag.gateway", lang, where=where)
     if ews.status == 404:
-        tail = " Веб-почта OWA при этом отвечает." if _owa_alive(owa) else ""
-        return "По адресу /EWS/Exchange.asmx ничего нет (HTTP 404): EWS здесь не опубликован или выключен." + tail + \
-            " Спросите ИТ, доступен ли EWS и по какому адресу; его можно указать в поле «Адрес сервера» полностью."
+        tail = " " + t("diag.owa_alive", lang) if _owa_alive(owa) else ""
+        return t("diag.not_found", lang) + tail + " " + t("diag.not_found_tail", lang)
     if ews.status == 403:
-        return "Доступ к EWS запрещён (HTTP 403): администраторы закрыли EWS для вашей учётной записи или снаружи сети. Попробуйте с VPN или спросите ИТ."
+        return t("diag.forbidden", lang)
     if ews.status == 401:
         offered = [s.lower() for s in ews.auth_schemes]
         mine = {"ntlm": "ntlm", "basic": "basic", "kerberos": "negotiate"}.get(settings.auth_type, settings.auth_type)
         if signed_in and offered and mine not in offered and not (mine == "ntlm" and "negotiate" in offered):
-            return f"EWS не принимает выбранный способ входа ({settings.auth_type}). Сервер предлагает: {', '.join(ews.auth_schemes)}. Смените «Способ входа» в разделе «Дополнительно»."
-        return "EWS есть, но не принял логин и пароль. Проверьте их; для входа Windows логин пишется как DOMAIN\\login."
+            return t("diag.wrong_auth", lang, auth=settings.auth_type, offered=", ".join(ews.auth_schemes))
+        return t("diag.bad_credentials", lang)
     if ews.status == 200 and (ews.content_type or "").startswith("text/html"):
-        return f"Вместо EWS сервер отдаёт веб-страницу «{ews.title or 'без заголовка'}». Похоже, адрес ведёт на портал или шлюз, а не на Exchange. Проверьте адрес и VPN."
+        return t("diag.html_page", lang, title=ews.title or t("diag.no_title", lang))
     if ews.status and ews.status >= 500:
-        return f"EWS отвечает ошибкой сервера (HTTP {ews.status}). Попробуйте позже или сообщите ИТ."
-    return "Сервер отвечает не как EWS. Подробности ниже: пришлите их разработчику или в ИТ."
+        return t("diag.server_error", lang, status=ews.status)
+    return t("diag.fallback", lang)

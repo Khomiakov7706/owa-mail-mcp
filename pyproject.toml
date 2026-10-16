@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "owa-mail-mcp"
-version = "0.3.2"
+version = "0.4.0"
 description = "MCP server for Exchange / OWA mail: check, search, read threads, find senders, send only after the user confirms in a local window."
 readme = "README.md"
 license = "MIT"
@@ -23,7 +23,7 @@ dev = ["pytest>=8"]
 owa-mail-mcp = "owa_mail_mcp.__main__:main"
 
 [tool.hatch.build.targets.wheel]
-artifacts = ["src/owa_mail_mcp/*.html"]
+artifacts = ["src/owa_mail_mcp/*.html", "src/owa_mail_mcp/locales/*.json"]
 packages = ["src/owa_mail_mcp"]
 
 [tool.pytest.ini_options]

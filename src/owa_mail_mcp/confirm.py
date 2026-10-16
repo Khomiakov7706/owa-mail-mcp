@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable
 
+from .i18n import Coded
 from .models import Outgoing
 from .safety import OutgoingReview
 
@@ -54,6 +55,7 @@ class Proposal:
             "message": self.message.to_dict(),
             "external": self.review.external,
             "warnings": self.review.warnings,
+            "warning_codes": [getattr(w, "code", "") for w in self.review.warnings],
             "reply_context": self.reply_context,
             "seconds_left": max(0, int(self.deadline - now)) if self.status == Status.PENDING else 0,
             "edited": self.edited,
@@ -138,14 +140,14 @@ class ConfirmationBroker:
             self._expire_due()
             proposal = self._items.get(proposal_id)
             if proposal is None:
-                return "This message is no longer waiting."
+                return Coded("This message is no longer waiting.", "gone")
             if proposal.status != Status.PENDING:
-                return f"Already {proposal.status.value}."
+                return Coded(f"Already {proposal.status.value}.", "already")
             if approve and edited is not None:
                 try:
                     review = self._review(edited)
                 except ValueError as exc:
-                    return str(exc)
+                    return Coded(str(exc), getattr(exc, "code", ""), **getattr(exc, "params", {}))
                 if edited.fingerprint() != proposal.message.fingerprint():
                     proposal.edited = True
                 proposal.message, proposal.review = edited, review

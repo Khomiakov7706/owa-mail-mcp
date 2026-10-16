@@ -14,7 +14,7 @@ import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Union
 
 Handler = Callable[[dict[str, Any]], tuple[int, Any]]
 
@@ -26,7 +26,7 @@ def load_page(name: str) -> str:
 
 
 class LocalWebApp:
-    def __init__(self, page: str, host: str = "127.0.0.1", port: int = 0) -> None:
+    def __init__(self, page: Union[str, Callable[[], str]], host: str = "127.0.0.1", port: int = 0) -> None:
         if host not in {"127.0.0.1", "localhost", "::1"}:
             raise ValueError("Local windows only listen on the loopback interface.")
         self.token = secrets.token_urlsafe(24)
@@ -111,7 +111,8 @@ class LocalWebApp:
                     return self._send(404, b"not found", "text/plain")
                 if route == "":
                     nonce = secrets.token_urlsafe(12)
-                    return self._send(200, app._page.replace("{{NONCE}}", nonce).encode(), "text/html; charset=utf-8", nonce=nonce)
+                    page = app._page() if callable(app._page) else app._page  # built per request: the language can change
+                    return self._send(200, page.replace("{{NONCE}}", nonce).encode(), "text/html; charset=utf-8", nonce=nonce)
                 handler = app._get.get(route)
                 if handler is None:
                     return self._send(404, b"not found", "text/plain")
