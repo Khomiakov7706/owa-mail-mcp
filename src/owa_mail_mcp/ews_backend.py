@@ -8,6 +8,7 @@ documented, stable API; OWA's own `service.svc` JSON calls are not (see README).
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 from datetime import datetime
@@ -92,16 +93,24 @@ def _create_session(self):  # noqa: ANN001
     plain_request = session.request
 
     def request(method, url, *args, **kwargs):
+        ews = "/ews/" in url.lower()
         try:
-            return plain_request(method, url, *args, **kwargs)
+            response = plain_request(method, url, *args, **kwargs)
         except requests.ConnectionError as exc:
             # Dropped with no answer at all: the request never reached Exchange (a fresh
             # connection the front end refused, or a keep-alive connection that timed out).
             # Sign in on a new connection and send it once more.
-            if "/ews/" not in url.lower() or not _dropped_without_answer(exc):
+            if not ews or not _dropped_without_answer(exc):
                 raise
             warm_up(session, endpoint)
             return plain_request(method, url, *args, **kwargs)
+        if ews and response.status_code == 404:
+            # Some front ends answer 404 instead of dropping an EWS request on a connection that
+            # has not signed in to OWA. Sign in and try once more; a second 404 is reported.
+            response.close()
+            warm_up(session, endpoint)
+            return plain_request(method, url, *args, **kwargs)
+        return response
 
     session.request = request
     return session
@@ -122,6 +131,22 @@ _SCAN_CAP = 500
 _MAX_FOLDERS = 40
 _EPOCH = EWSDateTime(1970, 1, 1, tzinfo=ZoneInfo("UTC"))
 _FOLDER_CACHE_SECONDS = 600
+
+
+def _http_failure(status: int) -> str:
+    """The server answered, so it is reachable: say what the status means instead of blaming the network."""
+    if status == 404:
+        return ("Exchange answered HTTP 404 at the EWS address: the server is reachable, but EWS is not available "
+                "there from this network. If it worked before, the usual cause is being outside the corporate network "
+                "(VPN off or reconnecting): from outside, many companies publish only web mail. Otherwise the server "
+                "address changed. Ask the user to check the VPN; if it is on, ask them to run `owa-mail-mcp diagnose` "
+                "and share the output. Do not retry in a loop.")
+    if status == 403:
+        return ("Exchange answered HTTP 403 at the EWS address: access to EWS is forbidden for this account or from "
+                "this network. Ask the user to check the VPN or ask their IT department whether EWS is allowed.")
+    if status >= 500:
+        return f"Exchange answered HTTP {status} (a server error). Try again in a few minutes."
+    return f"Exchange answered HTTP {status} at the EWS address. Ask the user to run `owa-mail-mcp diagnose` and share the output."
 
 
 def ews_endpoint(server: str) -> str:
@@ -211,6 +236,9 @@ class EWSBackend:
                     "The server answered, but not like Exchange Web Services: check the server address "
                     "(the one you open webmail with) and that EWS is enabled."
                 ) from exc
+            status = re.search(r"Code: (\d{3})", text)
+            if status:
+                raise BackendError(_http_failure(int(status.group(1)))) from exc
             raise BackendError(f"Cannot reach Exchange: {text[:300]}. Is the VPN on?") from exc
         except (ConnectionError, TimeoutError) as exc:
             raise BackendError(f"Cannot reach Exchange ({type(exc).__name__}). Is the VPN on?") from exc

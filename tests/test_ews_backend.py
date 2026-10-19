@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from owa_mail_mcp.backend import AuthenticationError
+from owa_mail_mcp.backend import AuthenticationError, BackendError
 from owa_mail_mcp.config import Settings
 from owa_mail_mcp.ews_backend import CertificateProblem, EWSBackend
 
@@ -305,6 +305,60 @@ def test_ews_behind_a_front_end_that_wants_owa_sign_in_first(gated_exchange):
     backend = EWSBackend(_settings(port, fingerprint))
     assert backend.whoami().email == "ivan@corp.test"
     assert backend.find_people("Петров", 5)[0].name == "Иван Петров"
+
+
+class NotFoundUntilSignedIn(GatedExchange):
+    """A front end that answers 404 (instead of dropping) EWS on a connection not signed in to OWA."""
+
+    def do_POST(self):  # noqa: N802
+        if not self.signed_in:
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        FakeExchange.do_POST(self)
+
+
+class AlwaysNotFound(GatedExchange):
+    """Outside the corporate network: web mail is published, EWS is not."""
+
+    def do_POST(self):  # noqa: N802
+        self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        self.send_response(404)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", "9")
+        self.end_headers()
+        self.wfile.write(b"not found")
+
+
+def _serve(handler):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(FIXTURES / "ews-cert.pem", FIXTURES / "ews-key.pem")
+    server.socket = ctx.wrap_socket(server.socket, server_side=True)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    der = ssl.PEM_cert_to_DER_cert((FIXTURES / "ews-cert.pem").read_text())
+    return server, server.server_address[1], hashlib.sha256(der).hexdigest()
+
+
+def test_a_404_before_owa_sign_in_is_retried_after_it():
+    server, port, fingerprint = _serve(NotFoundUntilSignedIn)
+    try:
+        assert EWSBackend(_settings(port, fingerprint)).whoami().email == "ivan@corp.test"
+    finally:
+        server.shutdown()
+
+
+def test_a_404_says_the_server_answered_instead_of_blaming_the_network():
+    server, port, fingerprint = _serve(AlwaysNotFound)
+    try:
+        with pytest.raises(BackendError) as err:
+            EWSBackend(_settings(port, fingerprint)).whoami()
+    finally:
+        server.shutdown()
+    text = str(err.value)
+    assert "HTTP 404" in text and "Cannot reach" not in text and "not found" not in text and "diagnose" in text
 
 
 def test_diagnosis_finds_that_owa_sign_in_opens_ews(gated_exchange):
