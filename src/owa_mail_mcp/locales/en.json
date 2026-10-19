@@ -122,7 +122,7 @@
   "diag.page": "page: \"{title}\"",
   "diag.ews_error": "EWS error: {text}",
   "diag.exchange_headers": "Exchange headers: {list}",
-  "diag.warmed_ok": "EWS works (Exchange {version}), but only on a connection that signed in to OWA first: the server drops EWS requests on a new connection. The program does this sign-in itself — update it and test the connection again.",
+  "diag.warmed_ok": "EWS works (Exchange {version}), but only on a connection that signed in to OWA first: the server drops EWS requests on a new connection. That's normal for this server: the program signs in to OWA before EWS by itself. Check with: owa-mail-mcp check.",
   "diag.warmed_error": "After signing in to OWA, EWS answers (Exchange {version}) but with an error: {error}.",
   "diag.warmed_401": "After signing in to OWA, EWS asks to sign in again and doesn't accept the login and password. Check them; for Windows sign-in, the login is written as DOMAIN\\login.",
   "diag.warmed_dropped": "The server drops the connection at the EWS address even after signing in to OWA: EWS is closed to outside connections (web mail still works). Ask IT whether EWS can be opened for your account.",

@@ -122,7 +122,7 @@
   "diag.page": "页面：“{title}”",
   "diag.ews_error": "EWS 错误：{text}",
   "diag.exchange_headers": "Exchange 标头：{list}",
-  "diag.warmed_ok": "EWS 可用（Exchange {version}），但仅限于先登录过 OWA 的连接：服务器会丢弃新连接上的 EWS 请求。本程序会自动完成这一登录 — 请更新程序后重新测试连接。",
+  "diag.warmed_ok": "EWS 正常工作（Exchange {version}），但只能在先登录 OWA 的连接上使用：服务器会断开新连接上的 EWS 请求。对此服务器来说这是正常的：程序会在使用 EWS 前自动登录 OWA。检查命令：owa-mail-mcp check。",
   "diag.warmed_error": "登录 OWA 后，EWS 有响应（Exchange {version}），但返回了错误：{error}。",
   "diag.warmed_401": "登录 OWA 后，EWS 要求再次登录，且不接受该登录名和密码。请检查；如使用 Windows 登录，登录名应写作 DOMAIN\\login。",
   "diag.warmed_dropped": "即使登录 OWA 后，服务器仍会断开 EWS 地址上的连接：EWS 未对外开放（网页版邮箱仍可使用）。请询问 IT 部门能否为你的帐户开放 EWS。",

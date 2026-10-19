@@ -122,7 +122,7 @@
   "diag.page": "página: \"{title}\"",
   "diag.ews_error": "error de EWS: {text}",
   "diag.exchange_headers": "encabezados de Exchange: {list}",
-  "diag.warmed_ok": "EWS funciona (Exchange {version}), pero solo en una conexión que antes inició sesión en OWA: el servidor descarta las solicitudes EWS en una conexión nueva. El programa hace este inicio de sesión por sí mismo: actualízalo y vuelve a probar la conexión.",
+  "diag.warmed_ok": "EWS funciona (Exchange {version}), pero solo en una conexión que primero inició sesión en OWA: el servidor corta las solicitudes EWS en una conexión nueva. Es normal en este servidor: el programa inicia sesión en OWA antes de usar EWS por sí solo. Compruébalo con: owa-mail-mcp check.",
   "diag.warmed_error": "Tras iniciar sesión en OWA, EWS responde (Exchange {version}), pero con un error: {error}.",
   "diag.warmed_401": "Tras iniciar sesión en OWA, EWS vuelve a pedir el inicio de sesión y no acepta el usuario y la contraseña. Compruébalos; con el inicio de sesión de Windows, el usuario se escribe como DOMAIN\\login.",
   "diag.warmed_dropped": "El servidor corta la conexión en la dirección de EWS incluso después de iniciar sesión en OWA: EWS está cerrado a las conexiones externas (el correo web sigue funcionando). Pregunta a TI si se puede abrir EWS para tu cuenta.",
