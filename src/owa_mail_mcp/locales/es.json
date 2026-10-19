@@ -78,7 +78,6 @@
   "setup.system_answer": "Respuesta del sistema: {text}",
   "setup.server_said": "Qué respondió el servidor",
   "setup.error": "Error",
-
   "msg.enter_server_email": "Escribe la dirección del servidor y el correo electrónico.",
   "msg.email_format": "El correo electrónico debe tener la forma nombre@empresa.com.",
   "msg.https_needed": "Se requiere HTTPS: la contraseña nunca se envía por http.",
@@ -110,7 +109,6 @@
   "msg.net_proxy_hint": "Busca la dirección del proxy en la configuración de red o pídela a TI, y escríbela en «Avanzado» → «Proxy».",
   "msg.proxy_pac": "El sistema usa configuración automática de proxy (PAC){where}, que este programa no lee. Pide a TI la dirección del proxy para el correo web (o búscala en el archivo PAC) y escríbela en «Avanzado» → «Proxy».",
   "msg.proxy_wpad": "El sistema usa detección automática de proxy (WPAD), que este programa no utiliza. Escribe el proxy manualmente en «Avanzado» → «Proxy».",
-
   "diag.ews_anonymous": "EWS sin iniciar sesión",
   "diag.ews_signed_in": "EWS con inicio de sesión",
   "diag.owa_signin": "Inicio de sesión en OWA",
@@ -144,7 +142,14 @@
   "diag.no_title": "sin título",
   "diag.server_error": "EWS responde con un error del servidor (HTTP {status}). Inténtalo más tarde o avisa a TI.",
   "diag.fallback": "El servidor no responde como EWS. Los detalles están abajo: envíalos al desarrollador o a TI.",
-
+  "diag.dns": "{host} en DNS: {ips}",
+  "diag.dns_failed": "{host} no se encuentra en DNS",
+  "diag.ip_public": "pública",
+  "diag.ip_internal": "interna",
+  "diag.route_proxy": "ruta: a través del proxy {proxy}",
+  "diag.route_direct": "ruta: directa, sin proxy",
+  "diag.not_exchange": "Las solicitudes no llegan a Exchange: incluso el correo web (/owa/) responde «404 Not Found» sin ningún encabezado de Exchange, mientras que un Exchange que funciona responde ahí con una página de inicio de sesión. Esto ocurre fuera de la red corporativa: la VPN está desactivada o reconectándose, o el nombre del servidor no se resuelve con el DNS de la VPN. Comprueba si el correo web se abre ahora mismo en tu navegador; si se abre, compara la ruta de abajo (dirección y proxy) con la que usa el navegador.",
+  "diag.not_exchange_public": "El nombre {host} apunta ahora a la dirección pública {ip}: parece que el equipo está fuera de la red corporativa. Activa o vuelve a conectar la VPN y ejecuta el diagnóstico de nuevo.",
   "confirm.title": "Confirmar envío",
   "confirm.title_pending": "({n}) Confirmar envío",
   "confirm.h1": "OWA Mail MCP — confirmar envío",
@@ -180,7 +185,6 @@
   "confirm.edit": "Editar",
   "confirm.edited_suffix": " (con tus cambios)",
   "confirm.empty": "No hay mensajes pendientes de confirmación.",
-
   "policy.no_to": "Se necesita al menos un destinatario en «Para».",
   "policy.too_many": "Demasiados destinatarios ({n}); el límite es {limit}.",
   "policy.bad_address": "No es una dirección de correo electrónico: {list}. Solo se aceptan direcciones en ASCII simple.",
@@ -196,7 +200,6 @@
   "policy.bcc": "Hay copias ocultas (CCO).",
   "policy.gone": "Este mensaje ya no está pendiente de confirmación.",
   "policy.already": "Ya se ha gestionado.",
-
   "cli.version": "owa-mail-mcp {version}",
   "cli.settings": "configuración: {path}",
   "cli.not_created": " (aún no creado)",

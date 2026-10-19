@@ -9,7 +9,9 @@ Exchange headers and page titles: no bodies, no passwords, no cookies.
 from __future__ import annotations
 
 import html
+import ipaddress
 import re
+import socket
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urljoin, urlparse
@@ -18,7 +20,7 @@ import requests
 
 from .config import Settings
 from .i18n import current_language, t
-from .tls import PinningAdapter, apply_transport_settings, host_port
+from .tls import PinningAdapter, apply_transport_settings, host_port, proxy_for
 
 _EXCHANGE_HEADERS = ("X-OWA-Version", "X-FEServer", "X-BEServer", "X-CalculatedBETarget", "X-DiagInfo", "request-id", "X-Powered-By")
 _SOAP_GET_FOLDER = (
@@ -84,12 +86,54 @@ class Probe:
 class Diagnosis:
     summary: str
     probes: list[Probe]
+    route: list[str] = field(default_factory=list)
+    """Where the name resolves and whether a proxy is in the way: what decides which server answers."""
 
     def to_dict(self) -> dict[str, Any]:
-        return {"summary": self.summary, "details": [p.line() for p in self.probes], "probes": [p.to_dict() for p in self.probes]}
+        return {"summary": self.summary, "details": self.route + [p.line() for p in self.probes], "probes": [p.to_dict() for p in self.probes]}
 
     def text(self) -> str:
-        return self.summary + "\n\n" + "\n".join("- " + p.line() for p in self.probes)
+        return self.summary + "\n\n" + "\n".join("- " + line for line in self.route + [p.line() for p in self.probes])
+
+
+@dataclass
+class Route:
+    host: str
+    addresses: list[str]
+    proxy: str | None
+
+    @property
+    def public_only(self) -> bool:
+        """Every address is a public one: from inside a corporate network, Exchange usually resolves to an internal one."""
+        try:
+            return bool(self.addresses) and all(ipaddress.ip_address(a).is_global for a in self.addresses)
+        except ValueError:
+            return False
+
+    def lines(self, lang: str | None) -> list[str]:
+        if not self.addresses:
+            dns = t("diag.dns_failed", lang, host=self.host)
+        else:
+            kinds = []
+            for a in self.addresses:
+                try:
+                    kinds.append(f"{a} ({t('diag.ip_public' if ipaddress.ip_address(a).is_global else 'diag.ip_internal', lang)})")
+                except ValueError:
+                    kinds.append(a)
+            dns = t("diag.dns", lang, host=self.host, ips=", ".join(kinds))
+        via = t("diag.route_proxy", lang, proxy=self.proxy) if self.proxy else t("diag.route_direct", lang)
+        return [dns, via]
+
+
+def route_to(host: str, settings: Settings) -> Route:
+    try:
+        addresses = sorted({info[4][0] for info in socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)})
+    except OSError:
+        addresses = []
+    proxy = settings.proxy or proxy_for(host)
+    if proxy and "@" in proxy:  # never show proxy credentials
+        proxy = proxy.split("://")[0] + "://" + proxy.rsplit("@", 1)[1] if "://" in proxy else proxy.rsplit("@", 1)[1]
+    return Route(host=host, addresses=addresses, proxy=proxy)
 
 
 def _session(settings: Settings) -> requests.Session:
@@ -198,7 +242,8 @@ def diagnose(settings: Settings, ews_url: str, lang: str | None = None) -> Diagn
         probes = [p for p in (anonymous, signed_in, owa, owa_signin, warmed) if p]
     else:
         probes = [p for p in (anonymous, signed_in, owa) if p]
-    return Diagnosis(summary=explain(anonymous, signed_in, owa, settings, warmed, lang=lang), probes=probes)
+    route = route_to(host, settings)
+    return Diagnosis(summary=explain(anonymous, signed_in, owa, settings, warmed, lang=lang, route=route), probes=probes, route=route.lines(lang))
 
 
 def _looks_like_login(p: Probe) -> bool:
@@ -210,8 +255,12 @@ def _owa_alive(p: Probe) -> bool:
     return bool(p.exchange.get("X-OWA-Version") or "/owa/auth" in " ".join(p.redirects).lower() or (p.status in (200, 401) and not p.error))
 
 
+def _exchange_seen(*probes: Probe | None) -> bool:
+    return any(p and (p.exchange or p.ews_version or p.auth_schemes) for p in probes)
+
+
 def explain(anonymous: Probe, signed_in: Probe | None, owa: Probe, settings: Settings, warmed: Probe | None = None,
-            lang: str | None = None) -> str:
+            lang: str | None = None, route: Route | None = None) -> str:
     lang = lang or current_language(settings)
     ews = signed_in or anonymous
     if warmed is not None and ews.error:
@@ -225,6 +274,12 @@ def explain(anonymous: Probe, signed_in: Probe | None, owa: Probe, settings: Set
             return t("diag.warmed_dropped", lang)
     if anonymous.error and owa.error:
         return t("diag.no_answer", lang)
+    if ews.status == 404 and owa.status == 404 and not _exchange_seen(anonymous, signed_in, owa):
+        # Even web mail is "not found", with nothing Exchange-like in the answers: whatever answers is not Exchange.
+        text = t("diag.not_exchange", lang)
+        if route and route.public_only:
+            text += " " + t("diag.not_exchange_public", lang, host=route.host, ip=route.addresses[0])
+        return text
     if signed_in and signed_in.ews_version:
         if signed_in.status == 200:
             return t("diag.works", lang, version=signed_in.ews_version)

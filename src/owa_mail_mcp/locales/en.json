@@ -78,7 +78,6 @@
   "setup.system_answer": "System response: {text}",
   "setup.server_said": "What the server answered",
   "setup.error": "Error",
-
   "msg.enter_server_email": "Enter the server address and email.",
   "msg.email_format": "The email should look like name@company.com.",
   "msg.https_needed": "HTTPS is required: the password is never sent over http.",
@@ -110,7 +109,6 @@
   "msg.net_proxy_hint": "Look up the proxy address in your network settings or ask IT, and enter it under Advanced → Proxy.",
   "msg.proxy_pac": "The system uses automatic proxy configuration (PAC){where}, which this program doesn't read. Ask IT for the proxy address for web mail (or find it in the PAC file) and enter it under Advanced → Proxy.",
   "msg.proxy_wpad": "The system uses proxy auto-discovery (WPAD), which this program doesn't use. Enter the proxy manually under Advanced → Proxy.",
-
   "diag.ews_anonymous": "EWS without sign-in",
   "diag.ews_signed_in": "EWS with sign-in",
   "diag.owa_signin": "OWA sign-in",
@@ -144,7 +142,14 @@
   "diag.no_title": "untitled",
   "diag.server_error": "EWS answers with a server error (HTTP {status}). Try later or tell IT.",
   "diag.fallback": "The server doesn't answer like EWS. Details below: send them to the developer or to IT.",
-
+  "diag.dns": "{host} in DNS: {ips}",
+  "diag.dns_failed": "{host} is not found in DNS",
+  "diag.ip_public": "public",
+  "diag.ip_internal": "internal",
+  "diag.route_proxy": "route: through the proxy {proxy}",
+  "diag.route_direct": "route: direct, no proxy",
+  "diag.not_exchange": "The requests don't reach Exchange: even web mail (/owa/) answers \"404 Not Found\" without any Exchange headers, while a working Exchange answers there with a sign-in page. This happens outside the corporate network: the VPN is off or reconnecting, or the server name isn't resolved through the VPN's DNS. Check whether web mail opens in your browser right now; if it does, compare the route below (address and proxy) with the way your browser goes.",
+  "diag.not_exchange_public": "The name {host} currently points to the public address {ip}: the computer seems to be outside the corporate network. Turn the VPN on or reconnect it, and run the diagnostics again.",
   "confirm.title": "Confirm sending",
   "confirm.title_pending": "({n}) Confirm sending",
   "confirm.h1": "OWA Mail MCP — confirm sending",
@@ -180,7 +185,6 @@
   "confirm.edit": "Edit",
   "confirm.edited_suffix": " (with your changes)",
   "confirm.empty": "No messages waiting for confirmation.",
-
   "policy.no_to": "At least one recipient in To is required.",
   "policy.too_many": "Too many recipients ({n}); the limit is {limit}.",
   "policy.bad_address": "Not an email address: {list}. Only plain ASCII addresses are accepted.",
@@ -196,7 +200,6 @@
   "policy.bcc": "There are hidden copies (Bcc).",
   "policy.gone": "This message is no longer waiting for confirmation.",
   "policy.already": "Already handled.",
-
   "cli.version": "owa-mail-mcp {version}",
   "cli.settings": "settings: {path}",
   "cli.not_created": " (not created yet)",

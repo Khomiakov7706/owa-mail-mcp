@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from owa_mail_mcp.config import Settings
-from owa_mail_mcp.diagnose import diagnose
+from owa_mail_mcp.diagnose import Route, diagnose
 
 FIXTURES = Path(__file__).parent / "fixtures"
 PASSWORD = "s3cret-Pa55"
@@ -46,6 +46,8 @@ class Server(BaseHTTPRequestHandler):
             return self._send(404, [("Content-Type", "text/html")], b"<title>404</title>") if ews else self._send(200, [("Content-Type", "text/html"), *owa_headers], b"<title>Outlook</title>")
         if mode == "portal":
             return self._send(200, [("Content-Type", "text/html")], "<html><title>Check Point Mobile — вход</title></html>".encode())
+        if mode == "not_exchange":  # some other web server: plain 404 everywhere, nothing from Exchange
+            return self._send(404, [("Content-Type", "text/html")], b"<html><title>404 Not Found</title></html>")
         if mode == "ntlm_only":
             return self._send(401, [("WWW-Authenticate", "Negotiate"), ("WWW-Authenticate", "NTLM")])
         if mode == "works":
@@ -110,3 +112,21 @@ def test_foreign_redirect_is_not_followed(server):
 
 def test_missing_mentions_owa(server):
     assert "OWA при этом отвечает" in run(server, "missing").summary
+
+
+def test_404_everywhere_means_the_answer_is_not_from_exchange(server):
+    result = run(server, "not_exchange")
+    assert "доходят не до Exchange" in result.summary and "VPN" in result.summary
+    assert "публичный адрес" not in result.summary  # localhost is not a public address
+    text = result.text()
+    assert "адрес localhost в DNS: 127.0.0.1 (внутренний)" in text and "путь: напрямую, без прокси" in text
+
+
+def test_route_tells_public_from_internal_and_hides_proxy_credentials():
+    assert Route("owa.bank.ru", ["185.1.2.3"], None).public_only
+    assert not Route("owa.bank.ru", ["10.20.30.40"], None).public_only
+    assert not Route("owa.bank.ru", [], None).public_only
+    from owa_mail_mcp.diagnose import route_to
+
+    route = route_to("localhost", Settings(proxy="http://user:pw@proxy.corp:3128"))
+    assert route.proxy == "http://proxy.corp:3128"

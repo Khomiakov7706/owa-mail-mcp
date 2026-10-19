@@ -78,7 +78,6 @@
   "setup.system_answer": "系统响应：{text}",
   "setup.server_said": "服务器的响应",
   "setup.error": "错误",
-
   "msg.enter_server_email": "请输入服务器地址和电子邮件地址。",
   "msg.email_format": "电子邮件地址格式应为 name@company.com。",
   "msg.https_needed": "必须使用 HTTPS：密码绝不会通过 http 发送。",
@@ -110,7 +109,6 @@
   "msg.net_proxy_hint": "请在网络设置中查找代理地址或询问 IT 部门，然后在「高级」→「代理」中填写。",
   "msg.proxy_pac": "系统使用了自动代理配置（PAC）{where}，本程序不会读取它。请向 IT 部门索取网页版邮箱所用的代理地址（或在 PAC 文件中查找），然后在「高级」→「代理」中填写。",
   "msg.proxy_wpad": "系统使用了代理自动发现（WPAD），本程序不使用该功能。请在「高级」→「代理」中手动填写代理。",
-
   "diag.ews_anonymous": "未登录访问 EWS",
   "diag.ews_signed_in": "登录后访问 EWS",
   "diag.owa_signin": "登录 OWA",
@@ -144,7 +142,14 @@
   "diag.no_title": "无标题",
   "diag.server_error": "EWS 返回服务器错误（HTTP {status}）。请稍后重试或告知 IT 部门。",
   "diag.fallback": "服务器的响应不像 EWS。详细信息如下：请发送给开发者或 IT 部门。",
-
+  "diag.dns": "{host} 的 DNS 解析：{ips}",
+  "diag.dns_failed": "DNS 中找不到 {host}",
+  "diag.ip_public": "公网",
+  "diag.ip_internal": "内网",
+  "diag.route_proxy": "路径：通过代理 {proxy}",
+  "diag.route_direct": "路径：直连，不经过代理",
+  "diag.not_exchange": "请求没有到达 Exchange：连网页版邮箱（/owa/）都返回“404 Not Found”，且没有任何 Exchange 响应头，而正常的 Exchange 在这里会显示登录页面。这通常发生在公司网络之外：VPN 已断开或正在重连，或者服务器名称没有通过 VPN 的 DNS 解析。请检查此刻浏览器能否打开网页版邮箱；如果能，请将下方的路径（地址和代理）与浏览器的访问方式进行比较。",
+  "diag.not_exchange_public": "名称 {host} 当前指向公网地址 {ip}：这台电脑似乎不在公司网络内。请打开或重新连接 VPN，然后再次运行诊断。",
   "confirm.title": "确认发送",
   "confirm.title_pending": "({n}) 确认发送",
   "confirm.h1": "OWA Mail MCP — 确认发送",
@@ -180,7 +185,6 @@
   "confirm.edit": "编辑",
   "confirm.edited_suffix": "（含你的修改）",
   "confirm.empty": "没有等待确认的邮件。",
-
   "policy.no_to": "「收件人」中至少需要一个地址。",
   "policy.too_many": "收件人过多（{n}），上限为 {limit}。",
   "policy.bad_address": "不是有效的电子邮件地址：{list}。仅接受纯 ASCII 地址。",
@@ -196,7 +200,6 @@
   "policy.bcc": "存在密送（Bcc）收件人。",
   "policy.gone": "此邮件已不再等待确认。",
   "policy.already": "已处理。",
-
   "cli.version": "owa-mail-mcp {version}",
   "cli.settings": "设置文件：{path}",
   "cli.not_created": "（尚未创建）",
