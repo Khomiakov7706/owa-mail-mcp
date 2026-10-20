@@ -279,13 +279,12 @@ uv tool install --python 3.12 git+https://github.com/Khomiakov7706/owa-mail-mcp
 owa-mail-mcp setup</pre><button class="copy" type="button" data-copy="#c-win">Copiar</button></div>
       </div>
       <div class="tabpanel" role="tabpanel" id="p-agent" aria-labelledby="t-agent">
-        <p id="agents">Copia el texto y envíaselo a tu agente (Claude Code, Codex, Cursor): instalará y conectará el servidor por su cuenta. El agente no necesita tu contraseña: la introduces tú en la ventana de configuración.</p>
+        <p id="agents">Copia este texto y envíaselo a un agente que tenga terminal en tu equipo: Claude Code, Codex, Cursor, OpenCode, Kilo Code. Lo hace todo por sí mismo siguiendo las <a href="../agent-install.md">instrucciones para agentes (en inglés)</a>.</p>
         <div class="code"><pre class="wrap-text" id="c-agent">Instala y conecta el servidor MCP OWA Mail para mi correo de trabajo de Exchange.
-1. Ejecuta: curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh
-2. Conecta el servidor a ti mismo. Para Claude Code: claude mcp add --scope user owa-mail -- ~/.local/bin/owa-mail-mcp
-3. El correo (dirección del servidor, usuario, contraseña) lo configuro yo en la ventana que se abrirá; no me pidas la contraseña.
-4. Después, llama a get_status y muestra el resultado.
-Instrucciones para agentes: https://khomiakov7706.github.io/owa-mail-mcp/llms.txt</pre><button class="copy" type="button" data-copy="#c-agent">Copiar</button></div>
+Sigue paso a paso las instrucciones para agentes: https://khomiakov7706.github.io/owa-mail-mcp/agent-install.md
+No me pidas la contraseña: la escribiré yo en la ventana de configuración.</pre><button class="copy" type="button" data-copy="#c-agent">Copiar</button></div>
+        <ol class="agent-steps"><li>Instala el programa y lo conecta a sí mismo (y a otros clientes si se lo pides).</li><li>Te pide la dirección del correo web y tu correo, y abre la ventana de configuración con ellos ya rellenados.</li><li>Tú escribes la contraseña y pulsas «Probar conexión» y «Guardar»; activas el envío solo si quieres.</li><li>El agente comprueba la conexión y te dice cómo reiniciar tu cliente.</li></ol>
+        <p>El agente nunca ve tu contraseña ni cambia por ti los ajustes de seguridad. Si el agente funciona en la nube o en un entorno aislado, y no en tu equipo, te dará los comandos para que los ejecutes tú.</p>
       </div>
     </div>
 

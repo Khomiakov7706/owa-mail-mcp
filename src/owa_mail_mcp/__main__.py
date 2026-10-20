@@ -6,11 +6,16 @@
   owa-mail-mcp check      tests the saved connection
   owa-mail-mcp status     version, where the settings are, whether the setup is complete (exit 0) or not (exit 2)
   owa-mail-mcp diagnose   shows what the server answers on the EWS and OWA addresses
+  owa-mail-mcp connect C  adds the server to an MCP client (claude-code, codex, claude-desktop, cursor, opencode, kilo)
+
+For agents installing this on the user's behalf: `status --json`, `connect --list`, and `setup --server/--email`
+to prefill the window. The password is only ever typed by the user, in the setup window.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 import threading
@@ -78,7 +83,7 @@ def serve() -> None:
         launcher.stop()
 
 
-def status() -> int:
+def status(as_json: bool = False) -> int:
     from . import __version__
     from .config import config_path
     from .i18n import LANGUAGES, current_language, t
@@ -86,6 +91,22 @@ def status() -> int:
     settings = Settings.load()
     lang = current_language(settings)
     path = config_path()
+    if as_json:
+        from .setup import installers, server_command
+
+        command, cmd_args = server_command()
+        print(json.dumps({
+            "version": __version__,
+            "configured": settings.is_configured,
+            "server": settings.server, "email": settings.email, "login": settings.login,
+            "password_saved": bool(settings.password),
+            "sending_allowed": settings.allow_send,
+            "language": lang,
+            "settings_file": str(path),
+            "command": [command, *cmd_args],
+            "clients": {k: v["available"] for k, v in installers(lang).items()},
+        }, ensure_ascii=False, indent=2))
+        return 0 if settings.is_configured else 2
     print(t("cli.version", lang, version=__version__))
     print(t("cli.settings", lang, path=path) + ("" if path.exists() else t("cli.not_created", lang)))
     print(t("cli.language", lang, value=LANGUAGES[lang]))
@@ -125,6 +146,31 @@ def check() -> int:
     return 0
 
 
+def connect(target: str | None, list_only: bool = False) -> int:
+    from .setup import CLIENTS, install_client, installers
+
+    if list_only or not target:
+        for client, info in installers().items():
+            print(f"{client:15} {'found' if info['available'] else 'not found'}")
+        return 0 if list_only else 1
+    result = install_client(target)
+    print(result["message"], file=sys.stdout if result["ok"] else sys.stderr)
+    return 0 if result["ok"] else (2 if target not in CLIENTS else 1)
+
+
+def prefill(server: str | None, email: str | None, username: str | None) -> None:
+    """Saves what the agent learned from the user (never a password) so the setup window opens filled in."""
+    from dataclasses import replace
+
+    from .config import save_settings
+
+    if not (server or email or username):
+        return
+    settings = Settings.load(with_password=False)
+    save_settings(replace(settings, server=server or settings.server, email=email or settings.email,
+                          username=username or settings.username))
+
+
 def diagnose_cmd() -> int:
     from .diagnose import diagnose
     from .ews_backend import ews_endpoint
@@ -141,8 +187,14 @@ def diagnose_cmd() -> int:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="owa-mail-mcp", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", nargs="?", choices=["serve", "setup", "check", "status", "diagnose"])
+    parser.add_argument("command", nargs="?", choices=["serve", "setup", "check", "status", "diagnose", "connect"])
+    parser.add_argument("target", nargs="?", help="connect: the MCP client to add the server to")
     parser.add_argument("--no-browser", action="store_true", help="setup: print the address instead of opening the browser")
+    parser.add_argument("--server", help="setup: prefill the web mail address")
+    parser.add_argument("--email", help="setup: prefill the email address")
+    parser.add_argument("--username", help="setup: prefill the login (DOMAIN\\login), if it differs from the email")
+    parser.add_argument("--json", action="store_true", help="status: machine-readable output")
+    parser.add_argument("--list", action="store_true", help="connect: list the clients found on this computer")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
     # stdout belongs to the MCP protocol: every log line goes to stderr.
@@ -155,11 +207,14 @@ def main(argv: list[str] | None = None) -> None:
     if command == "setup":
         from .setup import run_setup
 
+        prefill(args.server, args.email, args.username)
         run_setup(open_browser=not args.no_browser)
     elif command == "check":
         sys.exit(check())
     elif command == "status":
-        sys.exit(status())
+        sys.exit(status(as_json=args.json))
+    elif command == "connect":
+        sys.exit(connect(args.target, list_only=args.list))
     elif command == "diagnose":
         sys.exit(diagnose_cmd())
     else:

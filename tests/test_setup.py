@@ -221,3 +221,28 @@ def test_jsonc_with_comments_is_never_rewritten(tmp_path, monkeypatch):
     path.write_text('{"mcp": {}}')
     _, r = SetupApp().install({"target": "kilo"})
     assert r["ok"] and json.loads(path.read_text())["mcp"]["owa-mail"]["type"] == "local"
+
+
+def test_agent_commands_status_json_connect_and_prefill(isolated, capsys, monkeypatch, tmp_path):
+    from owa_mail_mcp.__main__ import connect, prefill, status
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    assert status(as_json=True) == 2
+    state = json.loads(capsys.readouterr().out)
+    assert state["configured"] is False and state["password_saved"] is False and "opencode" in state["clients"]
+
+    # What the agent learned from the user goes into the window, never a password.
+    prefill("owa.corp.ru", "ivan@corp.ru", None)
+    saved = json.loads(config.config_path().read_text())
+    assert saved["server"] == "owa.corp.ru" and saved["email"] == "ivan@corp.ru" and "password" not in saved
+
+    assert connect("opencode") == 0
+    written = json.loads((tmp_path / "xdg" / "opencode" / "opencode.json").read_text())
+    assert written["mcp"]["owa-mail"]["type"] == "local"
+    assert connect("no-such-client") == 2
+
+    isolated["ivan@corp.ru"] = "secret"
+    capsys.readouterr()
+    assert status(as_json=True) == 0
+    out = capsys.readouterr().out
+    assert json.loads(out)["configured"] is True and "secret" not in out

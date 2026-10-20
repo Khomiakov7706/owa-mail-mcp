@@ -296,13 +296,12 @@ uv tool install --python 3.12 git+https://github.com/Khomiakov7706/owa-mail-mcp
 owa-mail-mcp setup</pre><button class="copy" type="button" data-copy="#c-win">Копировать</button></div>
       </div>
       <div class="tabpanel" role="tabpanel" id="p-agent" aria-labelledby="t-agent">
-        <p id="agents">Скопируйте текст и отправьте своему агенту (Claude Code, Codex, Cursor) — он установит и подключит сервер сам. Пароль агенту не нужен: его вы введёте в окне настройки.</p>
+        <p id="agents">Скопируйте текст и отправьте агенту, у которого есть терминал на вашем компьютере: Claude Code, Codex, Cursor, OpenCode, Kilo Code. Он сделает всё сам по <a href="agent-install.md">инструкции для агентов</a>.</p>
         <div class="code"><pre class="wrap-text" id="c-agent">Установи и подключи MCP-сервер OWA Mail для моей рабочей почты Exchange.
-1. Выполни: curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh
-2. Подключи сервер к себе. Для Claude Code: claude mcp add --scope user owa-mail -- ~/.local/bin/owa-mail-mcp
-3. Почту (адрес сервера, логин, пароль) я настрою сам в открывшемся окне — не спрашивай у меня пароль.
-4. После этого вызови get_status и покажи результат.
-Инструкция для агентов: https://khomiakov7706.github.io/owa-mail-mcp/llms.txt</pre><button class="copy" type="button" data-copy="#c-agent">Копировать</button></div>
+Следуй инструкции для агентов шаг за шагом: https://khomiakov7706.github.io/owa-mail-mcp/agent-install.md
+Пароль у меня не спрашивай — я введу его сам в окне настройки.</pre><button class="copy" type="button" data-copy="#c-agent">Копировать</button></div>
+        <ol class="agent-steps"><li>Установит программу и подключит её к себе (и к другим клиентам, если попросите).</li><li>Спросит адрес веб-почты и почту и откроет окно настройки, где они уже заполнены.</li><li>Вы вводите пароль, нажимаете «Проверить подключение» и «Сохранить»; отправку включаете, только если хотите.</li><li>Агент проверит подключение и скажет, как перезапустить клиент.</li></ol>
+        <p>Агент не видит пароль и не меняет за вас настройки безопасности. Если агент работает в облаке или в песочнице, а не на вашем компьютере, он даст вам команды, чтобы вы выполнили их сами.</p>
       </div>
     </div>
 

@@ -279,13 +279,12 @@ uv tool install --python 3.12 git+https://github.com/Khomiakov7706/owa-mail-mcp
 owa-mail-mcp setup</pre><button class="copy" type="button" data-copy="#c-win">Copy</button></div>
       </div>
       <div class="tabpanel" role="tabpanel" id="p-agent" aria-labelledby="t-agent">
-        <p id="agents">Copy this text and send it to your agent (Claude Code, Codex, Cursor). It will install and connect the server for you. The agent doesn’t need your password: you enter it in the setup window.</p>
+        <p id="agents">Copy this text and send it to an agent that has a terminal on your computer: Claude Code, Codex, Cursor, OpenCode, Kilo Code. It does everything itself, following the <a href="../agent-install.md">instructions for agents</a>.</p>
         <div class="code"><pre class="wrap-text" id="c-agent">Install and connect the OWA Mail MCP server for my Exchange work email.
-1. Run: curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh
-2. Connect the server to yourself. For Claude Code: claude mcp add --scope user owa-mail -- ~/.local/bin/owa-mail-mcp
-3. I'll set up the mailbox (server address, login, password) myself in the window that opens — don't ask me for the password.
-4. Then call get_status and show me the result.
-Instructions for agents: https://khomiakov7706.github.io/owa-mail-mcp/llms.txt</pre><button class="copy" type="button" data-copy="#c-agent">Copy</button></div>
+Follow the instructions for agents step by step: https://khomiakov7706.github.io/owa-mail-mcp/agent-install.md
+Don't ask me for my password — I'll type it myself in the setup window.</pre><button class="copy" type="button" data-copy="#c-agent">Copy</button></div>
+        <ol class="agent-steps"><li>Installs the program and connects it to itself (and to other clients if you ask).</li><li>Asks for your web mail address and email, and opens the setup window with them filled in.</li><li>You type your password, click Test connection and Save; you turn on sending only if you want to.</li><li>The agent checks the connection and tells you how to restart your client.</li></ol>
+        <p>The agent never sees your password and doesn't change security settings for you. If the agent runs in the cloud or in a sandbox rather than on your computer, it gives you the commands to run yourself.</p>
       </div>
     </div>
 

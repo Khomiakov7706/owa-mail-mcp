@@ -28,15 +28,15 @@ owa-mail-mcp setup
 
 ### Install through your agent
 
-Text you can send to your agent:
+For agents with a terminal on your computer: Claude Code, Codex, Cursor, OpenCode, Kilo Code. Text you can send to your agent:
 
 ```text
 Install and connect the OWA Mail MCP server for my Exchange work email.
-1. Run: curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh
-2. Connect the server to yourself. For Claude Code: claude mcp add --scope user owa-mail -- ~/.local/bin/owa-mail-mcp
-3. I'll set up the mailbox (server address, login, password) myself in the window that opens — don't ask me for the password.
-4. Then call get_status and show me the result.
+Follow the instructions for agents step by step: https://khomiakov7706.github.io/owa-mail-mcp/agent-install.md
+Don't ask me for my password — I'll type it myself in the setup window.
 ```
+
+The agent installs the program, connects it to itself, asks for your web mail address and email, and opens the setup window with them filled in. You type the password there and turn on sending only if you want to. Then the agent checks the connection and tells you how to restart the client. If the agent runs in the cloud or a sandbox, it gives you the commands to run. Full instructions for agents: [agent-install.md](https://khomiakov7706.github.io/owa-mail-mcp/agent-install.md).
 
 ## Setup (the `owa-mail-mcp setup` window)
 

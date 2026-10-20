@@ -279,13 +279,12 @@ uv tool install --python 3.12 git+https://github.com/Khomiakov7706/owa-mail-mcp
 owa-mail-mcp setup</pre><button class="copy" type="button" data-copy="#c-win">复制</button></div>
       </div>
       <div class="tabpanel" role="tabpanel" id="p-agent" aria-labelledby="t-agent">
-        <p id="agents">复制下面的文本发给你的智能体（Claude Code、Codex、Cursor），它会自己完成安装和接入。智能体不需要你的密码：密码由你在设置窗口中填写。</p>
+        <p id="agents">复制下面的文本，发给能在你电脑上使用终端的智能体：Claude Code、Codex、Cursor、OpenCode、Kilo Code。它会按照<a href="../agent-install.md">智能体安装说明（英文）</a>自己完成全部步骤。</p>
         <div class="code"><pre class="wrap-text" id="c-agent">为我的 Exchange 工作邮箱安装并接入 OWA Mail MCP 服务器。
-1. 运行：curl -LsSf https://raw.githubusercontent.com/Khomiakov7706/owa-mail-mcp/main/install.sh | sh
-2. 将服务器接入你自己（即当前智能体）。Claude Code 的命令：claude mcp add --scope user owa-mail -- ~/.local/bin/owa-mail-mcp
-3. 邮箱（服务器地址、登录名、密码）我会在弹出的窗口中自己配置，不要向我索要密码。
-4. 完成后调用 get_status 并展示结果。
-智能体说明：https://khomiakov7706.github.io/owa-mail-mcp/llms.txt</pre><button class="copy" type="button" data-copy="#c-agent">复制</button></div>
+请严格按照这份智能体说明一步步操作：https://khomiakov7706.github.io/owa-mail-mcp/agent-install.md
+不要向我索要密码——我会在设置窗口中自己输入。</pre><button class="copy" type="button" data-copy="#c-agent">复制</button></div>
+        <ol class="agent-steps"><li>安装程序，并将其接入自身（如有需要，也可接入其他客户端）。</li><li>询问你的网页版邮箱地址和邮箱，然后打开已预先填好的设置窗口。</li><li>你输入密码，点击「测试连接」和「保存」；只有在需要时才开启发送。</li><li>智能体检查连接，并告诉你如何重启客户端。</li></ol>
+        <p>智能体看不到你的密码，也不会替你更改安全设置。如果智能体运行在云端或沙箱中、而不是你的电脑上，它会把命令交给你自己执行。</p>
       </div>
     </div>
 

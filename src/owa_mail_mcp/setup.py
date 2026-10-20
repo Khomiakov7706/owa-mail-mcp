@@ -25,6 +25,7 @@ from .tls import LegacyTLSRequired, ServerUnreachable, apply_transport_settings,
 from .web import LocalWebApp
 
 SERVER_NAME = "owa-mail"
+CLIENTS = ("claude-code", "codex", "claude-desktop", "cursor", "opencode", "kilo")
 _AUTH_TYPES = ("ntlm", "basic", "kerberos")
 
 
@@ -179,16 +180,7 @@ class SetupApp:
         }
 
     def _installers(self, lang: str) -> dict[str, dict[str, Any]]:
-        missing = lambda cmd: t("msg.hint_cli_missing", lang, cmd=cmd)  # noqa: E731
-        absent = lambda app: t("msg.hint_not_installed", lang, app=app)  # noqa: E731
-        return {
-            "claude-code": {"available": bool(shutil.which("claude")), "hint": missing("claude")},
-            "codex": {"available": bool(shutil.which("codex")), "hint": missing("codex")},
-            "claude-desktop": {"available": claude_desktop_config().parent.exists(), "hint": absent("Claude Desktop")},
-            "cursor": {"available": cursor_config().parent.exists(), "hint": absent("Cursor")},
-            "opencode": {"available": bool(shutil.which("opencode")) or opencode_config().parent.exists(), "hint": absent("OpenCode")},
-            "kilo": {"available": bool(shutil.which("kilo")) or kilo_config().parent.exists(), "hint": t("msg.hint_kilo_missing", lang)},
-        }
+        return installers(lang)
 
     # --- account -----------------------------------------------------------------------------
 
@@ -344,34 +336,53 @@ class SetupApp:
     # --- clients -----------------------------------------------------------------------------
 
     def install(self, data: dict[str, Any]) -> tuple[int, Any]:
-        target = str(data.get("target") or "")
-        command, args = server_command()
-        lang = current_language()
-        try:
-            if target == "claude-code":
-                return 200, _run_cli(["claude", "mcp", "add", "--scope", "user", SERVER_NAME, "--", command, *args], "Claude Code", lang)
-            if target == "codex":
-                return 200, _run_cli(["codex", "mcp", "add", SERVER_NAME, "--", command, *args], "Codex", lang)
-            if target == "claude-desktop":
-                path = _merge_json(claude_desktop_config(), "mcpServers", _plain_entry(command, args), lang=lang)
-                return 200, {"ok": True, "message": t("msg.written_claude_desktop", lang, path=path)}
-            if target == "cursor":
-                path = _merge_json(cursor_config(), "mcpServers", _plain_entry(command, args), lang=lang)
-                return 200, {"ok": True, "message": t("msg.written_cursor", lang, path=path)}
-            if target == "opencode":
-                path = _merge_json(opencode_config(), "mcp", opencode_entry(command, args), schema="https://opencode.ai/config.json", lang=lang)
-                return 200, {"ok": True, "message": t("msg.written_opencode", lang, path=path)}
-            if target == "kilo":
-                path = _merge_json(kilo_config(), "mcp", opencode_entry(command, args), lang=lang)
-                return 200, {"ok": True, "message": t("msg.written_kilo", lang, path=path)}
-        except (OSError, ValueError) as exc:
-            return 200, {"ok": False, "message": str(exc)}
-        return 400, {"ok": False, "message": "unknown target"}
+        result = install_client(str(data.get("target") or ""))
+        return (200 if "unknown" not in result else 400), {k: v for k, v in result.items() if k != "unknown"}
 
     def done(self, data: dict[str, Any]) -> tuple[int, Any]:
         if self._on_done:
             threading.Timer(0.3, self._on_done).start()
         return 200, {"ok": True}
+
+
+def installers(lang: str | None = None) -> dict[str, dict[str, Any]]:
+    """Clients the setup window (and `owa-mail-mcp connect`) can add the server to, and whether each is present."""
+    missing = lambda cmd: t("msg.hint_cli_missing", lang, cmd=cmd)  # noqa: E731
+    absent = lambda app: t("msg.hint_not_installed", lang, app=app)  # noqa: E731
+    return {
+        "claude-code": {"available": bool(shutil.which("claude")), "hint": missing("claude")},
+        "codex": {"available": bool(shutil.which("codex")), "hint": missing("codex")},
+        "claude-desktop": {"available": claude_desktop_config().parent.exists(), "hint": absent("Claude Desktop")},
+        "cursor": {"available": cursor_config().parent.exists(), "hint": absent("Cursor")},
+        "opencode": {"available": bool(shutil.which("opencode")) or opencode_config().parent.exists(), "hint": absent("OpenCode")},
+        "kilo": {"available": bool(shutil.which("kilo")) or kilo_config().parent.exists(), "hint": t("msg.hint_kilo_missing", lang)},
+    }
+
+
+def install_client(target: str, lang: str | None = None) -> dict[str, Any]:
+    """Adds the server to one MCP client's configuration: `{"ok": bool, "message": str}`."""
+    command, args = server_command()
+    lang = lang or current_language()
+    try:
+        if target == "claude-code":
+            return _run_cli(["claude", "mcp", "add", "--scope", "user", SERVER_NAME, "--", command, *args], "Claude Code", lang)
+        if target == "codex":
+            return _run_cli(["codex", "mcp", "add", SERVER_NAME, "--", command, *args], "Codex", lang)
+        if target == "claude-desktop":
+            path = _merge_json(claude_desktop_config(), "mcpServers", _plain_entry(command, args), lang=lang)
+            return {"ok": True, "message": t("msg.written_claude_desktop", lang, path=path)}
+        if target == "cursor":
+            path = _merge_json(cursor_config(), "mcpServers", _plain_entry(command, args), lang=lang)
+            return {"ok": True, "message": t("msg.written_cursor", lang, path=path)}
+        if target == "opencode":
+            path = _merge_json(opencode_config(), "mcp", opencode_entry(command, args), schema="https://opencode.ai/config.json", lang=lang)
+            return {"ok": True, "message": t("msg.written_opencode", lang, path=path)}
+        if target == "kilo":
+            path = _merge_json(kilo_config(), "mcp", opencode_entry(command, args), lang=lang)
+            return {"ok": True, "message": t("msg.written_kilo", lang, path=path)}
+    except (OSError, ValueError) as exc:
+        return {"ok": False, "message": str(exc)}
+    return {"ok": False, "message": f"unknown client {target!r}: use one of {', '.join(CLIENTS)}", "unknown": True}
 
 
 def _ews_backend(settings: Settings):
