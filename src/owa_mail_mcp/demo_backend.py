@@ -22,6 +22,9 @@ PEOPLE = [
     Person(email="john.doe@partner.org", name="John Doe", job_title="Account manager"),
 ]
 _by_email = {p.email: p for p in PEOPLE}
+FOLDERS = ["Inbox", "Sent Items", "Drafts", "Deleted Items", "Junk Email", "Archive", "Проекты", "Проекты/Бюджет"]
+_WORDS = {"inbox": "Inbox", "sent": "Sent Items", "drafts": "Drafts", "deleted": "Deleted Items", "trash": "Deleted Items",
+          "junk": "Junk Email", "archive": "Archive", "архив": "Archive"}
 
 
 class DemoBackend:
@@ -31,6 +34,7 @@ class DemoBackend:
         self._lock = threading.Lock()
         self._ids = itertools.count(1)
         self.sent: list[Outgoing] = []
+        self.drafts: list[Outgoing] = []
         ref = reference or now()
         self.messages: list[Message] = []
         anna, oleg, maria, john = PEOPLE[1:]
@@ -91,7 +95,9 @@ class DemoBackend:
             return msg.folder == "Inbox"
         if scope == "sent":
             return msg.folder == "Sent Items"
-        return True
+        if scope == "inbox_and_sent":
+            return msg.folder in ("Inbox", "Sent Items")
+        return msg.folder not in ("Deleted Items", "Junk Email", "Drafts")
 
     def search(self, query: SearchQuery) -> SearchResult:
         def matches(m: Message) -> bool:
@@ -168,6 +174,58 @@ class DemoBackend:
             self.messages.append(msg)
             return msg.id
 
+
+    # --- organizing ---------------------------------------------------------------------------
+
+    def list_folders(self) -> list[dict]:
+        with self._lock:
+            return [{"path": f, "unread": sum(1 for m in self.messages if m.folder == f and not m.is_read),
+                     "total": sum(1 for m in self.messages if m.folder == f)} for f in FOLDERS]
+
+    def _folder(self, name: str) -> str:
+        key = name.strip().strip("/").lower()
+        if key in _WORDS:
+            return _WORDS[key]
+        for f in FOLDERS:
+            if f.lower() == key or f.rsplit("/", 1)[-1].lower() == key:
+                return f
+        raise BackendError(f"Folder {name!r}: no such folder. Take a path from list_folders.")
+
+    def save_draft(self, message: Outgoing) -> str | None:
+        with self._lock:
+            self.drafts.append(message)
+            msg = Message(id=f"demo-{next(self._ids)}", subject=message.subject, sender=ME, received=now(), folder="Drafts",
+                          preview=preview(message.body), to=[_by_email.get(x, Person(email=x)) for x in message.to],
+                          body=message.body)
+            self.messages.append(msg)
+            return msg.id
+
+    def _found(self, message_ids: list[str]) -> list[Message]:
+        found = [m for m in self.messages if m.id in set(message_ids)]
+        if not found:
+            raise BackendError("None of these message_ids were found. Take ids from check_mail, search_messages or get_thread.")
+        return found
+
+    def update_messages(self, message_ids, *, read, flag, add_categories, remove_categories) -> int:
+        with self._lock:
+            found = self._found(message_ids)
+            for m in found:
+                if read is not None:
+                    m.is_read = read
+                if flag is not None:
+                    m.flagged = flag == "flagged"
+                drop = {c.lower() for c in remove_categories}
+                m.categories = [c for c in m.categories if c.lower() not in drop]
+                m.categories += [c for c in add_categories if c.lower() not in {x.lower() for x in m.categories}]
+            return len(found)
+
+    def move_messages(self, message_ids: list[str], folder: str) -> tuple[str, list[str]]:
+        target = self._folder(folder)
+        with self._lock:
+            found = self._found(message_ids)
+            for m in found:  # Exchange gives a moved message a new id
+                m.folder, m.id = target, f"demo-{next(self._ids)}"
+            return target, [m.id for m in found]
 
     # --- calendar ----------------------------------------------------------------------------
 

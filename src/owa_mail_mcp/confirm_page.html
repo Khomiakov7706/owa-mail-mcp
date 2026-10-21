@@ -152,7 +152,7 @@ function pendingCard(item) {
   const card = el("div", { class: "card pending" },
     el("div", { class: "top" },
       el("div", { class: "who" }, T("asks", { client: item.client || T("mcp_client") })), timer),
-    item.reply_context ? el("div", { class: "reply" }, T("reply_to", { subject: item.reply_context.subject, from: item.reply_context.from || "?" })) : null);
+    item.reply_context ? el("div", { class: "reply" }, T(item.reply_context.forward ? "forward_of" : "reply_to", { subject: item.reply_context.subject, from: item.reply_context.from || "?" })) : null);
 
   if (draft) {
     const f = {};
@@ -176,7 +176,9 @@ function pendingCard(item) {
       m.cc.length ? el("div", { class: "row" }, el("div", { class: "k" }, T("cc")), chips(m.cc, item.external)) : null,
       m.bcc.length ? el("div", { class: "row" }, el("div", { class: "k" }, T("bcc")), chips(m.bcc, item.external)) : null,
       el("div", { class: "row" }, el("div", { class: "k" }, T("subject")), el("div", { class: "subject" }, m.subject)),
-      el("pre", { class: "body" }, m.body)));
+      item.reply_context && item.reply_context.forward && item.reply_context.attachments.length
+        ? el("div", { class: "row" }, el("div", { class: "k" }, T("attachments")), el("div", {}, item.reply_context.attachments.join(", "))) : null,
+      m.body ? el("pre", { class: "body" }, m.body) : null));
     const warnings = [...(item.external.length ? [T("external_count", { n: item.external.length })] : []),
                       ...item.warnings.map((w, i) => said(w, (item.warning_codes || [])[i]))];
     if (warnings.length) card.append(el("div", { class: "warn" }, el("ul", {}, warnings.map(w => el("li", {}, w)))));
@@ -200,7 +202,7 @@ function historyRow(item) {
   const m = item.message;
   return el("div", { class: "card done" },
     el("div", { class: "ell" }, el("span", { class: "subject" }, m.subject), " → ", m.to.join(", "), item.edited ? T("edited_suffix") : ""),
-    el("div", { class: "s " + item.status }, I18N["confirm.status_" + item.status] || item.status, item.error ? `: ${item.error}` : ""));
+    el("div", { class: "s " + item.status }, (item.auto && item.status === "sent" ? T("status_sent_auto") : I18N["confirm.status_" + item.status] || item.status), item.error ? `: ${item.error}` : ""));
 }
 
 function render(items) {

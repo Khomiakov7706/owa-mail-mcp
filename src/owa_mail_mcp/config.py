@@ -48,6 +48,12 @@ class Settings:
     """`send_email` refuses to work unless this is on."""
     allow_calendar: bool = False
     """`cancel_meeting` and `reschedule_meeting` refuse to work unless this is on."""
+    allow_organize: bool = False
+    """Drafts, read/unread, flags, categories, moving to folders and to Deleted Items: reversible, no confirmation window."""
+    trusted_recipients: tuple[str, ...] = ()
+    """Addresses the user agreed to: an email whose every recipient is here goes out without the confirmation window."""
+    trusted_per_hour: int = 20
+    """At most this many emails an hour skip the window; beyond it they wait for the user again."""
     confirm_timeout: int = 50
     """Seconds the confirmation window waits. Most MCP clients give up on a call after 60."""
     ui_host: str = "127.0.0.1"
@@ -89,7 +95,7 @@ class Settings:
                 raw = {}
             known = {f.name for f in fields(cls)} - {"password"}
             values = {k: v for k, v in raw.items() if k in known}
-            for name in ("internal_domains", "legacy_tls"):
+            for name in ("internal_domains", "legacy_tls", "trusted_recipients"):
                 if name in values:
                     values[name] = tuple(values[name] or ())
         values.update(_env_overrides())
@@ -114,7 +120,7 @@ def _env_overrides() -> dict[str, Any]:
     for var, name in text.items():
         if env.get(var):
             out[name] = env[var].strip() if name != "password" else env[var]
-    for var, name in {"OWA_MAIL_ALLOW_SEND": "allow_send", "OWA_MAIL_ALLOW_CALENDAR": "allow_calendar", "OWA_MAIL_OPEN_BROWSER": "open_browser"}.items():
+    for var, name in {"OWA_MAIL_ALLOW_SEND": "allow_send", "OWA_MAIL_ALLOW_CALENDAR": "allow_calendar", "OWA_MAIL_ALLOW_ORGANIZE": "allow_organize", "OWA_MAIL_OPEN_BROWSER": "open_browser"}.items():
         raw = env.get(var, "").strip().lower()
         if raw:
             out[name] = raw in {"1", "true", "yes", "on"}
@@ -141,6 +147,7 @@ def save_settings(settings: Settings) -> Path:
         data.pop(transient, None)
     data["internal_domains"] = list(settings.internal_domains)
     data["legacy_tls"] = list(settings.legacy_tls)
+    data["trusted_recipients"] = list(settings.trusted_recipients)
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".config-", suffix=".json")

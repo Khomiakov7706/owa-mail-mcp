@@ -40,6 +40,7 @@ class MessageSummary:
     importance: str = "normal"
     preview: str = ""
     conversation_id: str | None = None
+    flagged: bool = False
     to: list[Person] = field(default_factory=list)
     cc: list[Person] = field(default_factory=list)
 
@@ -56,6 +57,8 @@ class MessageSummary:
         }
         if self.importance and self.importance != "normal":
             out["importance"] = self.importance
+        if self.flagged:
+            out["flagged"] = True
         return out
 
 
@@ -79,6 +82,8 @@ class Outgoing:
     subject: str = ""
     body: str = ""
     reply_to_id: str | None = None
+    forward_id: str | None = None
+    """Forward this message (with its attachments) instead of writing a new one."""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -88,11 +93,12 @@ class Outgoing:
             "subject": self.subject,
             "body": self.body,
             "reply_to_message_id": self.reply_to_id,
+            "forward_message_id": self.forward_id,
         }
 
     def fingerprint(self) -> tuple:
         norm = lambda xs: tuple(sorted(x.lower() for x in xs))  # noqa: E731
-        return (norm(self.to), norm(self.cc), norm(self.bcc), self.subject.strip(), self.body.strip(), self.reply_to_id)
+        return (norm(self.to), norm(self.cc), norm(self.bcc), self.subject.strip(), self.body.strip(), self.reply_to_id, self.forward_id)
 
 
 @dataclass

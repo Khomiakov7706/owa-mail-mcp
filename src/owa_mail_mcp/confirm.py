@@ -48,6 +48,8 @@ class Proposal:
     finished: float | None = None
     action: dict[str, Any] | None = None
     """A calendar change: `kind` (cancel, decline, delete, reschedule), the `event`, and `new_start`/`new_end` or `note`."""
+    auto: bool = False
+    """Sent without asking: every recipient is on the user's trusted list."""
 
     def to_dict(self, now: float) -> dict[str, Any]:
         return {
@@ -57,6 +59,7 @@ class Proposal:
             "from": self.sender,
             "message": self.message.to_dict() if self.message else None,
             "action": self.action,
+            "auto": self.auto,
             "external": self.review.external,
             "warnings": self.review.warnings,
             "warning_codes": [getattr(w, "code", "") for w in self.review.warnings],
@@ -106,6 +109,19 @@ class ConfirmationBroker:
             self._order.append(proposal.id)
             self._trim()
             self._cond.notify_all()
+            return proposal
+
+    def record_trusted(self, message: Outgoing, review: OutgoingReview, *, client: str, sender: str, reply_context=None) -> Proposal:
+        """An email that skips the question (trusted recipients): approved at once, but listed in the window's history."""
+        with self._cond:
+            now = self._clock()
+            proposal = Proposal(
+                id=secrets.token_urlsafe(9), message=message, review=review, client=client, sender=sender, created=now,
+                deadline=now, reply_context=reply_context, status=Status.APPROVED, finished=now, auto=True,
+            )
+            self._items[proposal.id] = proposal
+            self._order.append(proposal.id)
+            self._trim()
             return proposal
 
     def wait(self, proposal_id: str, timeout: float) -> Status:

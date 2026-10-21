@@ -21,6 +21,7 @@ from .backend import AuthenticationError, BackendError, SearchQuery
 from .config import KeyringUnavailable, Settings, config_path, get_password, save_settings, set_password
 from .i18n import LANGUAGES, current_language, normalize, render_page, t
 from .runtime import read_journal
+from .text import is_valid_address
 from .tls import LegacyTLSRequired, ServerUnreachable, apply_transport_settings, format_fingerprint, host_port, pin_key, probe
 from .web import LocalWebApp
 
@@ -166,6 +167,8 @@ class SetupApp:
             "access": {
                 "allow_send": settings.allow_send,
                 "allow_calendar": settings.allow_calendar,
+                "allow_organize": settings.allow_organize,
+                "trusted_recipients": "\n".join(settings.trusted_recipients),
                 "internal_domains": ", ".join(settings.internal_domains),
                 "confirm_timeout": settings.confirm_timeout,
             },
@@ -322,9 +325,14 @@ class SetupApp:
         except (TypeError, ValueError):
             timeout = 50
         timeout = max(15, min(timeout, 600))
+        trusted = parse_addresses(str(data.get("trusted_recipients") or ""))
+        bad = [a for a in trusted if not is_valid_address(a)]
+        if bad:
+            return 200, {"ok": False, "error": t("msg.trusted_invalid", list=", ".join(bad[:5]))}
         with self._lock:
             settings = Settings.load(with_password=False)
             save_settings(replace(settings, allow_send=bool(data.get("allow_send")), allow_calendar=bool(data.get("allow_calendar")),
+                                  allow_organize=bool(data.get("allow_organize")), trusted_recipients=tuple(trusted),
                                   internal_domains=domains, confirm_timeout=timeout))
         return 200, {"ok": True}
 
@@ -345,6 +353,16 @@ class SetupApp:
         if self._on_done:
             threading.Timer(0.3, self._on_done).start()
         return 200, {"ok": True}
+
+
+def parse_addresses(text: str) -> list[str]:
+    """One address per line (commas and semicolons work too), lowercased, without duplicates."""
+    out: list[str] = []
+    for part in text.replace(";", "\n").replace(",", "\n").split():
+        address = part.strip().strip("<>").lower()
+        if address and address not in out:
+            out.append(address)
+    return out
 
 
 def installers(lang: str | None = None) -> dict[str, dict[str, Any]]:

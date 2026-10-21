@@ -30,7 +30,7 @@ h2 { font-size: 16px; margin: 0 0 4px; }
 .lead { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
 label { display: block; font-size: 13px; font-weight: 600; margin-top: 12px; }
 .hint { color: var(--muted); font-size: 12px; margin-top: 3px; }
-input[type=text], input[type=email], input[type=password], input[type=number], select {
+input[type=text], input[type=email], input[type=password], input[type=number], select, textarea {
   width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 4px; }
 input[type=number] { width: 110px; }
 details { margin-top: 12px; } summary { cursor: pointer; color: var(--muted); font-size: 13px; }
@@ -141,6 +141,15 @@ footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 2
       <label class="plain" for="allow-calendar"><b>{{t:setup.allow_calendar}}</b>
         <span class="hint">{{t:setup.allow_calendar_hint}}</span></label>
     </div>
+    <div class="switch">
+      <input type="checkbox" id="allow-organize">
+      <label class="plain" for="allow-organize"><b>{{t:setup.allow_organize}}</b>
+        <span class="hint">{{t:setup.allow_organize_hint}}</span></label>
+    </div>
+    <label for="trusted">{{t:setup.trusted}} <span class="hint">{{t:setup.trusted_note}}</span></label>
+    <textarea id="trusted" rows="3" placeholder="anna.smirnova@company.com" spellcheck="false"></textarea>
+    <div class="hint">{{t:setup.trusted_hint}}</div>
+    <div class="msg err" id="access-error"></div>
     <label for="domains">{{t:setup.domains}} <span class="hint">{{t:setup.domains_note}}</span></label>
     <input type="text" id="domains" placeholder="company.ru, company.com" spellcheck="false">
     <div class="hint">{{t:setup.domains_hint}}</div>
@@ -212,7 +221,8 @@ function fillForm(s) {
   $("password").placeholder = s.password_stored ? T("password_placeholder_stored") : "";
   $("password-hint").textContent = s.password_stored ? T("password_stored_hint") : "";
   fillLanguages(s);
-  $("allow-send").checked = s.access.allow_send; $("allow-calendar").checked = s.access.allow_calendar; $("domains").value = s.access.internal_domains; $("timeout").value = s.access.confirm_timeout;
+  $("allow-send").checked = s.access.allow_send; $("allow-calendar").checked = s.access.allow_calendar;
+  $("allow-organize").checked = s.access.allow_organize; $("trusted").value = s.access.trusted_recipients; $("domains").value = s.access.internal_domains; $("timeout").value = s.access.confirm_timeout;
 }
 
 function fillLanguages(s) {
@@ -354,7 +364,10 @@ let accessTimer = null;
 function saveAccessSoon() {
   clearTimeout(accessTimer);
   accessTimer = setTimeout(async () => {
-    const r = await api("api/access", { allow_send: $("allow-send").checked, allow_calendar: $("allow-calendar").checked, internal_domains: $("domains").value, confirm_timeout: Number($("timeout").value) });
+    const r = await api("api/access", { allow_send: $("allow-send").checked, allow_calendar: $("allow-calendar").checked,
+      allow_organize: $("allow-organize").checked, trusted_recipients: $("trusted").value,
+      internal_domains: $("domains").value, confirm_timeout: Number($("timeout").value) });
+    $("access-error").textContent = r.ok ? "" : (r.error || "");
     if (r.ok) flash("access-saved");
   }, 400);
 }
@@ -370,6 +383,8 @@ $("save").addEventListener("click", saveAccount);
 for (const id of ["server", "email", "username", "password", "auth", "proxy"]) $(id).addEventListener("input", () => { $("save").disabled = accountKey() !== testedKey; });
 $("allow-send").addEventListener("change", saveAccessSoon);
 $("allow-calendar").addEventListener("change", saveAccessSoon);
+$("allow-organize").addEventListener("change", saveAccessSoon);
+$("trusted").addEventListener("input", saveAccessSoon);
 $("lang").addEventListener("change", async () => { await api("api/language", { language: $("lang").value }); location.reload(); });
 $("domains").addEventListener("input", saveAccessSoon);
 $("timeout").addEventListener("input", saveAccessSoon);

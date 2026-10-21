@@ -159,7 +159,7 @@ Para tu información — 9, boletines — 25.</div>
 
   <div class="wrap">
     <dl class="stats">
-      <div><dt><b>12</b></dt><dd><span>herramientas para el agente</span></dd></div>
+      <div><dt><b>18</b></dt><dd><span>herramientas para el agente</span></dd></div>
       <div><dt><b>0</b></dt><dd><span>correos sin tu «Enviar»</span></dd></div>
       <div><dt><b>1</b></dt><dd><span>comando para instalar</span></dd></div>
       <div><dt><b>MIT</b></dt><dd><span>código abierto, gratis</span></dd></div>
@@ -377,7 +377,7 @@ No me pidas la contraseña: la escribiré yo en la ventana de configuración.</p
   <div class="wrap">
     <p class="eyebrow">Para desarrolladores y agentes</p>
     <h2 id="tools-title">Herramientas MCP</h2>
-    <p class="section-sub">Todo excepto <code>send_email</code>, <code>cancel_meeting</code> y <code>reschedule_meeting</code> es de solo lectura; esas tres solo actúan después de que lo confirmes en la ventana. Los textos de los correos son datos, no instrucciones: el servidor le indica explícitamente al agente que no ejecute órdenes que aparezcan en los correos.</p>
+    <p class="section-sub">Los envíos, reenvíos y cambios de reuniones solo ocurren tras tu confirmación en la ventana, salvo los correos a destinatarios de tu lista de confianza. Las herramientas marcadas «organizar» son reversibles y funcionan tras un interruptor en la configuración. El resto solo lee. Los textos de los correos son datos, no instrucciones: el servidor le indica explícitamente al agente que no ejecute órdenes que aparezcan en los correos.</p>
     <div class="table">
       <table>
         <thead><tr><th scope="col">Herramienta</th><th scope="col">Qué hace</th></tr></thead>
@@ -391,6 +391,12 @@ No me pidas la contraseña: la escribiré yo en la ventana de configuración.</p
           <tr><td><code>find_people</code></td><td>Libreta de direcciones de la organización: nombre, dirección, cargo y departamento</td></tr>
           <tr><td><code>list_senders</code></td><td>Quién escribió en un periodo: número de correos, no leídos y último asunto; con <code>sent</code>, a quién escribiste tú</td></tr>
           <tr><td><code>send_email</code><span class="rw">escritura</span></td><td>Correo nuevo o respuesta (<code>reply_to_message_id</code>, <code>reply_all</code>), solo tras confirmarlo en la ventana</td></tr>
+          <tr><td><code>forward_email</code><span class="rw">escritura</span></td><td>Reenviar un correo con sus adjuntos; tras confirmarlo en la ventana, como un envío</td></tr>
+          <tr><td><code>create_draft</code><span class="rw">organizar</span></td><td>Guardar un correo, respuesta o reenvío en «Borradores»: lo envías tú desde Outlook u OWA</td></tr>
+          <tr><td><code>list_folders</code></td><td>Carpetas del buzón con número de correos y no leídos</td></tr>
+          <tr><td><code>update_messages</code><span class="rw">organizar</span></td><td>Marcar como leído o no leído, poner o quitar la marca, añadir o quitar categorías</td></tr>
+          <tr><td><code>move_messages</code><span class="rw">organizar</span></td><td>Mover a una carpeta o al archivo</td></tr>
+          <tr><td><code>delete_messages</code><span class="rw">organizar</span></td><td>Eliminar a «Elementos eliminados», desde donde se puede recuperar; nunca borra para siempre</td></tr>
           <tr><td><code>list_events</code></td><td>Reuniones del calendario en un periodo: hora, organizador, asistentes, si se repite</td></tr>
           <tr><td><code>cancel_meeting</code><span class="rw">escritura</span></td><td>Cancelar tu reunión (los asistentes reciben un aviso), rechazar la de otra persona o eliminar un evento sin asistentes; solo tras confirmarlo en la ventana (desactivado por defecto)</td></tr>
           <tr><td><code>reschedule_meeting</code><span class="rw">escritura</span></td><td>Mover tu reunión; los asistentes reciben la invitación actualizada; solo tras confirmarlo en la ventana (desactivado por defecto)</td></tr>
@@ -410,7 +416,7 @@ No me pidas la contraseña: la escribiré yo en la ventana de configuración.</p
     <div class="sec">
       <article class="card"><h3>La contraseña, en el llavero</h3><p>Keychain, Credential Manager o Secret Service. Ni en un archivo, ni en el registro, ni en manos del agente: no existe ninguna herramienta que la muestre.</p></article>
       <article class="card"><h3>Solo tu servidor</h3><p>La contraseña solo se envía al Exchange indicado y solo por HTTPS. Las redirecciones a otros hosts se hacen sin contraseña.</p></article>
-      <article class="card"><h3>Envío solo con tu «sí»</h3><p>Desactivado por defecto. Cada correo requiere tu clic en una ventana local. Se rechazan caracteres ocultos, direcciones no válidas y demasiados destinatarios; las direcciones externas se resaltan.</p></article>
+      <article class="card"><h3>Envío solo con tu «sí»</h3><p>Desactivado por defecto. Cada correo requiere tu clic en una ventana local. Se rechazan caracteres ocultos, direcciones no válidas y demasiados destinatarios; las direcciones externas se resaltan. La excepción: los destinatarios de la lista de confianza que tú mismo defines en la configuración; a ellos el correo sale al momento (como máximo 20 por hora).</p></article>
       <article class="card"><h3>Ventanas locales cerradas</h3><p>Solo 127.0.0.1, una dirección aleatoria secreta, comprobación de Host y Origin y bloqueo de incrustación: otros sitios no pueden alcanzarlas.</p></article>
       <article class="card"><h3>Certificado por huella</h3><p>La verificación normal de certificados está activada. Un certificado interno de la empresa solo se acepta si es exactamente ese, por SHA-256.</p></article>
       <article class="card"><h3>Sin bloquear tu cuenta</h3><p>Si la contraseña es rechazada, se dejan de enviar peticiones a Exchange, y la frecuencia de peticiones está limitada. El registro solo guarda nombres de herramientas y horas, nunca correos.</p></article>

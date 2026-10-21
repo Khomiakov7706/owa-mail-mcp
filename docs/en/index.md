@@ -41,7 +41,7 @@ The agent installs the program, connects it to itself, asks for your web mail ad
 ## Setup (the `owa-mail-mcp setup` window)
 
 1. **Mailbox.** Web mail address (`mail.company.com`, `https://owa.company.com` or `https://outlook.company.com/owa`), email, login (`DOMAIN\login` if your company uses Windows sign-in), password. Test connection shows your name, unread count and latest messages; then Save. The password is stored in the system keychain.
-2. **What the agent may do.** Read-only by default. "Allow sending email" turns on `send_email`, "Allow changing meetings" turns on `cancel_meeting` and `reschedule_meeting`; every message and every change is still confirmed in the window.
+2. **What the agent may do.** Read-only by default. "Allow sending email" turns on `send_email`, "Allow changing meetings" turns on `cancel_meeting` and `reschedule_meeting`, "Allow organizing mail" turns on drafts, flags, categories, folders and Deleted Items (no window: all reversible). Every message and every meeting change is confirmed in the window; only emails to recipients on the trusted list you set there go out without it (at most 20 an hour).
 3. **Connect to your agent.** An Add button for Claude Code, Codex, Claude Desktop, Cursor, or lines to copy.
 
 The windows follow the system language (English, Русский, 中文, Español); switch it in the top-right corner of the setup window or with `OWA_MAIL_LANG`.
@@ -131,6 +131,12 @@ After updating the program, restart the MCP server in your client: in Claude Cod
 | `find_people` | Organization address book: name, address, title, department |
 | `list_senders` | Who wrote in a period: message count, unread, latest subject |
 | `send_email` | A new message or a reply — only after the user confirms in the window (off by default) |
+| `forward_email` | Forward a message with its attachments — after the user confirms in the window, like sending |
+| `create_draft` | Save a message, reply or forward to Drafts; the user sends it themselves |
+| `list_folders` | Mailbox folders with message and unread counts |
+| `update_messages` | Read or unread, flag, categories |
+| `move_messages` | Move to a folder or the archive |
+| `delete_messages` | Delete to Deleted Items (restorable; never permanent) |
 | `list_events` | Meetings in the calendar for a period: time, organizer, attendees |
 | `cancel_meeting` | Cancel your meeting, decline someone else's, or delete an event without attendees — only after the user confirms in the window (off by default) |
 | `reschedule_meeting` | Move your meeting; attendees get the updated invitation — only after the user confirms in the window (off by default) |

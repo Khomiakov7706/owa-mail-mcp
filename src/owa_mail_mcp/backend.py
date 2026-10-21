@@ -119,3 +119,23 @@ class MailBackend(Protocol):
         """Moves the event; for a meeting the attendees get the updated invitation. Organizer only."""
         ...
 
+    # --- organizing ---------------------------------------------------------------------------
+
+    def list_folders(self) -> list[dict]:
+        """Mail folders: `path` (as move_messages takes it), `unread`, `total`."""
+        ...
+
+    def save_draft(self, message: Outgoing) -> str | None:
+        """Saves to Drafts (a reply or forward draft when the message refers to one). Returns its id when known."""
+        ...
+
+    def update_messages(self, message_ids: list[str], *, read: bool | None, flag: str | None,
+                        add_categories: list[str], remove_categories: list[str]) -> int:
+        """`flag`: flagged, complete or none. Returns how many messages were changed."""
+        ...
+
+    def move_messages(self, message_ids: list[str], folder: str) -> tuple[str, list[str]]:
+        """`folder`: inbox, archive, deleted, junk or a folder path from list_folders. Returns the folder's path and
+        the messages' new ids (Exchange gives a moved message a new id)."""
+        ...
+

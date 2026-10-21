@@ -12,6 +12,7 @@ import re
 import threading
 import time
 from datetime import datetime
+from typing import Any
 from urllib.parse import urlparse
 
 import requests
@@ -25,6 +26,7 @@ from exchangelib import (
     Configuration,
     Credentials,
     EWSDateTime,
+    ExtendedProperty,
     HTMLBody,
     Mailbox,
     Q,
@@ -51,6 +53,23 @@ from .config import Settings
 from .models import Event, Message, MessageSummary, Outgoing, Person
 from .text import html_to_text, normalize_whitespace, preview
 from .tls import PinningAdapter, apply_transport_settings
+
+class _FlagStatus(ExtendedProperty):
+    """PidTagFlagStatus, the follow-up flag OWA and Outlook show: 0 none, 1 complete, 2 flagged."""
+
+    property_tag = 0x1090
+    property_type = "Integer"
+
+
+if "flag_status" not in {f.name for f in EwsMessage.FIELDS}:
+    EwsMessage.register("flag_status", _FlagStatus)
+_FLAG_VALUES = {"none": 0, "complete": 1, "flagged": 2}
+_FOLDER_WORDS = {
+    "inbox": "inbox", "входящие": "inbox", "sent": "sent", "отправленные": "sent", "drafts": "drafts", "черновики": "drafts",
+    "deleted": "trash", "trash": "trash", "deleted items": "trash", "удалённые": "trash", "удаленные": "trash",
+    "junk": "junk", "spam": "junk", "нежелательная почта": "junk",
+}
+_ARCHIVE_NAMES = ("archive", "архив")
 
 # Every exchangelib session goes through the adapter that honours the certificates the user trusted.
 BaseProtocol.HTTP_ADAPTER_CLS = PinningAdapter
@@ -125,9 +144,9 @@ log = logging.getLogger(__name__)
 _AUTH_TYPES = {"ntlm": NTLM, "basic": BASIC, "digest": DIGEST, "gssapi": GSSAPI, "kerberos": GSSAPI, "sspi": SSPI}
 _SUMMARY_FIELDS = (
     "id", "subject", "sender", "datetime_received", "is_read", "has_attachments", "importance",
-    "conversation_id", "body", "to_recipients", "cc_recipients",
+    "conversation_id", "body", "to_recipients", "cc_recipients", "flag_status",
 )
-_HEADER_FIELDS = ("id", "subject", "sender", "datetime_received", "is_read", "has_attachments", "importance", "conversation_id")
+_HEADER_FIELDS = ("id", "subject", "sender", "datetime_received", "is_read", "has_attachments", "importance", "conversation_id", "flag_status")
 _FULL_FIELDS = _SUMMARY_FIELDS + ("attachments", "message_id", "in_reply_to", "categories", "conversation_topic")
 _EVENT_FIELDS = (
     "id", "changekey", "subject", "start", "end", "is_all_day", "location", "organizer", "required_attendees",
@@ -340,6 +359,7 @@ class EWSBackend:
             importance=(item.importance or "Normal").lower(),
             preview=preview(body) if with_preview else "",
             conversation_id=getattr(conv, "id", None),
+            flagged=getattr(item, "flag_status", None) == 2,
             to=[p for p in map(self._person, getattr(item, "to_recipients", None) or []) if p],
             cc=[p for p in map(self._person, getattr(item, "cc_recipients", None) or []) if p],
         )
@@ -523,6 +543,99 @@ class EWSBackend:
                 break
         return people
 
+    # --- organizing ---------------------------------------------------------------------------
+
+    def _mail_folders(self) -> list[tuple[str, Any]]:
+        cached = self._folders.get("paths")
+        if cached and time.monotonic() - cached[0] < _FOLDER_CACHE_SECONDS:
+            return cached[1]
+
+        def walk():
+            root = self.account.msg_folder_root
+            prefix = root.absolute.rstrip("/") + "/"
+            return [(f.absolute[len(prefix):] if f.absolute.startswith(prefix) else f.name, f)
+                    for f in root.walk() if getattr(f, "folder_class", None) in ("IPF.Note", None)]
+
+        found = self._call(walk)
+        self._folders["paths"] = (time.monotonic(), found)
+        return found
+
+    def _resolve_folder(self, name: str):
+        key = " ".join(name.strip().strip("/").split()).lower()
+        if key in _FOLDER_WORDS:
+            return getattr(self.account, _FOLDER_WORDS[key])
+        folders = self._mail_folders()
+        if key in _ARCHIVE_NAMES:
+            top = [f for path, f in folders if "/" not in path and path.lower() in _ARCHIVE_NAMES]
+            if top:
+                return top[0]
+            raise BackendError("This mailbox has no Archive folder. Use a folder from list_folders, or ask the user to create one.")
+        exact = [f for path, f in folders if path.lower() == key]
+        named = [f for path, f in folders if path.rsplit("/", 1)[-1].lower() == key]
+        if exact or len(named) == 1:
+            return (exact or named)[0]
+        hint = "several folders have this name; give the full path" if named else "no such folder"
+        raise BackendError(f"Folder {name!r}: {hint}. Take a path from list_folders.")
+
+    def list_folders(self) -> list[dict]:
+        return [{"path": path, "unread": f.unread_count, "total": f.total_count}
+                for path, f in self._mail_folders() if getattr(f, "folder_class", None) == "IPF.Note"]
+
+    def save_draft(self, message: Outgoing) -> str | None:
+        a = self.account
+        to, cc, bcc = _mailboxes(message.to), _mailboxes(message.cc), _mailboxes(message.bcc)
+        refers = message.forward_id or message.reply_to_id
+        if refers:
+            original = self._fetch(refers, ("id", "changekey", "subject"))
+            make = original.create_forward if message.forward_id else original.create_reply
+            self._call(lambda: make(subject=message.subject, body=message.body, to_recipients=to, cc_recipients=cc,
+                                    bcc_recipients=bcc).save(a.drafts))
+            return None
+        draft = EwsMessage(account=a, folder=a.drafts, subject=message.subject, body=message.body,
+                           to_recipients=to, cc_recipients=cc, bcc_recipients=bcc)
+        self._call(draft.save)
+        return draft.id
+
+    def _items(self, message_ids: list[str], fields) -> list:
+        def run():
+            try:
+                return self._fetch_many(message_ids, fields)
+            except (ErrorItemNotFound, ErrorInvalidIdMalformed):
+                return []
+
+        items = [i for i in self._call(run) if isinstance(i, _EwsMessageType)]
+        if not items:
+            raise BackendError("None of these message_ids were found. Take ids from check_mail, search_messages or get_thread.")
+        return items
+
+    def update_messages(self, message_ids: list[str], *, read: bool | None, flag: str | None,
+                        add_categories: list[str], remove_categories: list[str]) -> int:
+        items = self._items(message_ids, ("id", "changekey", "is_read", "categories", "flag_status"))
+        drop = {c.lower() for c in remove_categories}
+        for item in items:
+            fields = []
+            if read is not None:
+                item.is_read = read
+                fields.append("is_read")
+            if flag is not None:
+                item.flag_status = _FLAG_VALUES[flag]
+                fields.append("flag_status")
+            if add_categories or remove_categories:
+                categories = [c for c in (item.categories or []) if c.lower() not in drop]
+                categories += [c for c in add_categories if c.lower() not in {x.lower() for x in categories}]
+                item.categories = categories or None
+                fields.append("categories")
+            if fields:
+                self._call(lambda item=item, fields=fields: item.save(update_fields=fields))
+        return len(items)
+
+    def move_messages(self, message_ids: list[str], folder: str) -> tuple[str, list[str]]:
+        target = self._resolve_folder(folder)
+        items = self._items(message_ids, ("id", "changekey"))
+        for item in items:
+            self._call(lambda item=item: item.move(target))
+        return target.name, [item.id for item in items if item.id]
+
     # --- calendar ----------------------------------------------------------------------------
 
     def _event(self, item) -> Event:
@@ -596,6 +709,11 @@ class EWSBackend:
         to = [Mailbox(email_address=x) for x in message.to]
         cc = [Mailbox(email_address=x) for x in message.cc] or None
         bcc = [Mailbox(email_address=x) for x in message.bcc] or None
+        if message.forward_id:
+            original = self._fetch(message.forward_id, ("id", "changekey", "subject"))
+            # Exchange attaches the original's attachments and quotes it below, as Outlook does.
+            self._call(lambda: original.forward(subject=message.subject, body=message.body, to_recipients=to, cc_recipients=cc, bcc_recipients=bcc))
+            return None
         if message.reply_to_id:
             original = self._fetch(message.reply_to_id, ("id", "changekey", "subject"))
             # Exchange quotes the original under the reply, as Outlook does.
@@ -604,6 +722,10 @@ class EWSBackend:
         outgoing = EwsMessage(account=a, folder=a.sent, subject=message.subject, body=message.body, to_recipients=to, cc_recipients=cc, bcc_recipients=bcc)
         self._call(outgoing.send_and_save)
         return None
+
+
+def _mailboxes(addresses: list[str]) -> list[Mailbox] | None:
+    return [Mailbox(email_address=x) for x in addresses] or None
 
 
 def _local(value) -> datetime | None:
