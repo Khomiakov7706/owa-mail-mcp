@@ -37,7 +37,7 @@ def test_every_key_the_code_uses_exists():
         text = (PKG / page).read_text(encoding="utf-8")
         used |= set(re.findall(r"\{\{t:([\w.]+)\}\}", text))
         used |= {k if "." in k else prefix + k for k in re.findall(r'\bT\("([\w.]+)"', text)}
-    used = {k for k in used if not k.endswith(".")}  # prefixes of computed keys
+    used = {k for k in used if not k.endswith((".", "_"))}  # prefixes of computed keys
     assert used and not (used - set(en)), sorted(used - set(en))
 
 

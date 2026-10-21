@@ -25,6 +25,9 @@ def parse_when(value: str | None, *, end_of_day: bool = False, reference: dateti
         return ref
     if text in {"today", "сегодня"}:
         return midnight + timedelta(days=1) if end_of_day else midnight
+    if text in {"tomorrow", "завтра"}:
+        day = midnight + timedelta(days=1)
+        return day + timedelta(days=1) if end_of_day else day
     if text in {"yesterday", "вчера"}:
         day = midnight - timedelta(days=1)
         return day + timedelta(days=1) if end_of_day else day

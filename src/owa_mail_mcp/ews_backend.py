@@ -20,6 +20,8 @@ from zoneinfo import ZoneInfo
 from exchangelib import (
     DELEGATE,
     Account,
+    Body,
+    CalendarItem,
     Configuration,
     Credentials,
     EWSDateTime,
@@ -46,7 +48,7 @@ from exchangelib.transport import BASIC, DIGEST, GSSAPI, NTLM, SSPI
 from .attachments import MAX_BYTES
 from .backend import AttachmentData, AuthenticationError, BackendError, FolderScope, SearchQuery, SearchResult, pick_attachment
 from .config import Settings
-from .models import Message, MessageSummary, Outgoing, Person
+from .models import Event, Message, MessageSummary, Outgoing, Person
 from .text import html_to_text, normalize_whitespace, preview
 from .tls import PinningAdapter, apply_transport_settings
 
@@ -127,6 +129,10 @@ _SUMMARY_FIELDS = (
 )
 _HEADER_FIELDS = ("id", "subject", "sender", "datetime_received", "is_read", "has_attachments", "importance", "conversation_id")
 _FULL_FIELDS = _SUMMARY_FIELDS + ("attachments", "message_id", "in_reply_to", "categories", "conversation_topic")
+_EVENT_FIELDS = (
+    "id", "changekey", "subject", "start", "end", "is_all_day", "location", "organizer", "required_attendees",
+    "optional_attendees", "is_meeting", "type", "is_cancelled", "my_response_type",
+)
 _SCAN_CAP = 500
 _MAX_FOLDERS = 40
 _EPOCH = EWSDateTime(1970, 1, 1, tzinfo=ZoneInfo("UTC"))
@@ -517,6 +523,74 @@ class EWSBackend:
                 break
         return people
 
+    # --- calendar ----------------------------------------------------------------------------
+
+    def _event(self, item) -> Event:
+        me = (self.account.primary_smtp_address or "").lower()
+        organizer = self._person(item.organizer)
+        attendees = []
+        for attendee in list(item.required_attendees or []) + list(item.optional_attendees or []):
+            person = self._person(getattr(attendee, "mailbox", None))
+            if person and (person.email or "").lower() != me:
+                attendees.append(person)
+        response = item.my_response_type
+        is_meeting = bool(item.is_meeting) and bool(attendees)
+        is_organizer = (not is_meeting or response == "Organizer"
+                        or bool(organizer and (organizer.email or "").lower() == me))
+        return Event(
+            id=item.id, subject=item.subject or "", start=_local(item.start), end=_local(item.end),
+            is_all_day=bool(item.is_all_day), location=item.location or "", organizer=organizer,
+            is_organizer=is_organizer, attendees=attendees, is_meeting=is_meeting,
+            kind={"Occurrence": "occurrence", "Exception": "exception"}.get(item.type or "", "single"),
+            is_cancelled=bool(item.is_cancelled), my_response=response or None,
+        )
+
+    def _event_item(self, event_id: str):
+        def run():
+            try:
+                return list(self.account.fetch(ids=[ItemId(id=event_id)], folder=self.account.calendar, only_fields=list(_EVENT_FIELDS)))
+            except (ErrorItemNotFound, ErrorInvalidIdMalformed):
+                return []
+
+        results = self._call(run)
+        if not results or not isinstance(results[0], CalendarItem):
+            raise BackendError("No calendar event with this event_id. Take ids from list_events.")
+        return results[0]
+
+    def list_events(self, start: datetime, end: datetime, limit: int) -> list[Event]:
+        def run() -> list[Event]:
+            view = self.account.calendar.view(start=_ews_dt(start), end=_ews_dt(end), max_items=max(limit, 1))
+            return [self._event(item) for item in view.only(*_EVENT_FIELDS) if isinstance(item, CalendarItem)]
+
+        events = self._call(run)
+        events.sort(key=lambda e: e.start or start)
+        return events[:limit]
+
+    def get_event(self, event_id: str) -> Event:
+        return self._event(self._event_item(event_id))
+
+    def cancel_event(self, event_id: str, message: str) -> str:
+        item = self._event_item(event_id)
+        event = self._event(item)
+        if not event.is_meeting:
+            self._call(lambda: item.delete(send_meeting_cancellations="SendToNone"))
+            return "deleted"
+        note = Body(message) if message else None
+        if event.is_organizer:
+            self._call(lambda: item.cancel(new_body=note))
+            return "cancelled"
+        self._call(lambda: item.decline(body=note))
+        return "declined"
+
+    def reschedule_event(self, event_id: str, start: datetime, end: datetime) -> None:
+        item = self._event_item(event_id)
+        event = self._event(item)
+        if event.is_meeting and not event.is_organizer:
+            raise BackendError("Only the organizer can move this meeting. Offer the user to write to the organizer instead.")
+        item.start, item.end = _ews_dt(start), _ews_dt(end)
+        invitations = "SendToAllAndSaveCopy" if event.is_meeting else "SendToNone"
+        self._call(lambda: item.save(update_fields=["start", "end"], send_meeting_invitations=invitations))
+
     def send(self, message: Outgoing) -> str | None:
         a = self.account
         to = [Mailbox(email_address=x) for x in message.to]
@@ -530,6 +604,15 @@ class EWSBackend:
         outgoing = EwsMessage(account=a, folder=a.sent, subject=message.subject, body=message.body, to_recipients=to, cc_recipients=cc, bcc_recipients=bcc)
         self._call(outgoing.send_and_save)
         return None
+
+
+def _local(value) -> datetime | None:
+    """An EWS date-time as an aware datetime in the user's local zone."""
+    if value is None:
+        return None
+    if not isinstance(value, datetime):  # an all-day event may come as a plain date
+        return datetime(value.year, value.month, value.day).astimezone()
+    return datetime.fromtimestamp(value.timestamp()).astimezone()
 
 
 def _ews_dt(value: datetime) -> EWSDateTime:

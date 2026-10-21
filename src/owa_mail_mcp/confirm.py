@@ -1,4 +1,4 @@
-"""Pending sends waiting for the user's answer in the confirmation window.
+"""Pending sends and calendar changes waiting for the user's answer in the confirmation window.
 
 The answer never comes from the MCP client: a model can be talked into anything by an email it has
 read. Only the local window (a page only the user's browser has the address of) decides.
@@ -34,7 +34,8 @@ class Status(str, Enum):
 @dataclass
 class Proposal:
     id: str
-    message: Outgoing
+    message: Outgoing | None
+    """The email to send; None for a calendar change."""
     review: OutgoingReview
     client: str
     sender: str
@@ -45,6 +46,8 @@ class Proposal:
     edited: bool = False
     error: str | None = None
     finished: float | None = None
+    action: dict[str, Any] | None = None
+    """A calendar change: `kind` (cancel, decline, delete, reschedule), the `event`, and `new_start`/`new_end` or `note`."""
 
     def to_dict(self, now: float) -> dict[str, Any]:
         return {
@@ -52,7 +55,8 @@ class Proposal:
             "status": self.status.value,
             "client": self.client,
             "from": self.sender,
-            "message": self.message.to_dict(),
+            "message": self.message.to_dict() if self.message else None,
+            "action": self.action,
             "external": self.review.external,
             "warnings": self.review.warnings,
             "warning_codes": [getattr(w, "code", "") for w in self.review.warnings],
@@ -87,15 +91,16 @@ class ConfirmationBroker:
 
     # --- tool side ---------------------------------------------------------------------------
 
-    def submit(self, message: Outgoing, review: OutgoingReview, *, client: str, sender: str, timeout: float, reply_context=None) -> Proposal:
+    def submit(self, message: Outgoing | None, review: OutgoingReview, *, client: str, sender: str, timeout: float, reply_context=None,
+               action: dict[str, Any] | None = None) -> Proposal:
         with self._cond:
             self._expire_due()
             if sum(1 for p in self._items.values() if p.status == Status.PENDING) >= self._max_pending:
-                raise BrokerBusy(f"{self._max_pending} messages are already waiting for the user's answer. Wait for them first.")
+                raise BrokerBusy(f"{self._max_pending} requests are already waiting for the user's answer. Wait for them first.")
             now = self._clock()
             proposal = Proposal(
                 id=secrets.token_urlsafe(9), message=message, review=review, client=client, sender=sender,
-                created=now, deadline=now + timeout, reply_context=reply_context,
+                created=now, deadline=now + timeout, reply_context=reply_context, action=action,
             )
             self._items[proposal.id] = proposal
             self._order.append(proposal.id)
@@ -143,7 +148,7 @@ class ConfirmationBroker:
                 return Coded("This message is no longer waiting.", "gone")
             if proposal.status != Status.PENDING:
                 return Coded(f"Already {proposal.status.value}.", "already")
-            if approve and edited is not None:
+            if approve and edited is not None and proposal.message is not None:
                 try:
                     review = self._review(edited)
                 except ValueError as exc:

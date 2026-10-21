@@ -165,6 +165,7 @@ class SetupApp:
             "password_stored": stored,
             "access": {
                 "allow_send": settings.allow_send,
+                "allow_calendar": settings.allow_calendar,
                 "internal_domains": ", ".join(settings.internal_domains),
                 "confirm_timeout": settings.confirm_timeout,
             },
@@ -323,7 +324,8 @@ class SetupApp:
         timeout = max(15, min(timeout, 600))
         with self._lock:
             settings = Settings.load(with_password=False)
-            save_settings(replace(settings, allow_send=bool(data.get("allow_send")), internal_domains=domains, confirm_timeout=timeout))
+            save_settings(replace(settings, allow_send=bool(data.get("allow_send")), allow_calendar=bool(data.get("allow_calendar")),
+                                  internal_domains=domains, confirm_timeout=timeout))
         return 200, {"ok": True}
 
     def save_language(self, data: dict[str, Any]) -> tuple[int, Any]:

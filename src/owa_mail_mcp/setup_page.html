@@ -53,6 +53,7 @@ button:disabled { opacity: .5; cursor: default; }
 .switch { display: flex; gap: 12px; align-items: flex-start; margin-top: 6px; }
 .switch input { width: 18px; height: 18px; margin-top: 2px; flex: none; }
 .switch b { display: block; }
+.switch + .switch { margin-top: 14px; }
 .warn { background: var(--warn-bg); color: var(--warn-text); border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-top: 14px; }
 .client { border-top: 1px solid var(--line); padding: 12px 0; }
 .client:first-of-type { border-top: 0; padding-top: 4px; }
@@ -135,6 +136,11 @@ footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 2
       <label class="plain" for="allow-send"><b>{{t:setup.allow_send}}</b>
         <span class="hint">{{t:setup.allow_send_hint}}</span></label>
     </div>
+    <div class="switch">
+      <input type="checkbox" id="allow-calendar">
+      <label class="plain" for="allow-calendar"><b>{{t:setup.allow_calendar}}</b>
+        <span class="hint">{{t:setup.allow_calendar_hint}}</span></label>
+    </div>
     <label for="domains">{{t:setup.domains}} <span class="hint">{{t:setup.domains_note}}</span></label>
     <input type="text" id="domains" placeholder="company.ru, company.com" spellcheck="false">
     <div class="hint">{{t:setup.domains_hint}}</div>
@@ -206,7 +212,7 @@ function fillForm(s) {
   $("password").placeholder = s.password_stored ? T("password_placeholder_stored") : "";
   $("password-hint").textContent = s.password_stored ? T("password_stored_hint") : "";
   fillLanguages(s);
-  $("allow-send").checked = s.access.allow_send; $("domains").value = s.access.internal_domains; $("timeout").value = s.access.confirm_timeout;
+  $("allow-send").checked = s.access.allow_send; $("allow-calendar").checked = s.access.allow_calendar; $("domains").value = s.access.internal_domains; $("timeout").value = s.access.confirm_timeout;
 }
 
 function fillLanguages(s) {
@@ -348,7 +354,7 @@ let accessTimer = null;
 function saveAccessSoon() {
   clearTimeout(accessTimer);
   accessTimer = setTimeout(async () => {
-    const r = await api("api/access", { allow_send: $("allow-send").checked, internal_domains: $("domains").value, confirm_timeout: Number($("timeout").value) });
+    const r = await api("api/access", { allow_send: $("allow-send").checked, allow_calendar: $("allow-calendar").checked, internal_domains: $("domains").value, confirm_timeout: Number($("timeout").value) });
     if (r.ok) flash("access-saved");
   }, 400);
 }
@@ -363,6 +369,7 @@ $("test").addEventListener("click", runTest);
 $("save").addEventListener("click", saveAccount);
 for (const id of ["server", "email", "username", "password", "auth", "proxy"]) $(id).addEventListener("input", () => { $("save").disabled = accountKey() !== testedKey; });
 $("allow-send").addEventListener("change", saveAccessSoon);
+$("allow-calendar").addEventListener("change", saveAccessSoon);
 $("lang").addEventListener("change", async () => { await api("api/language", { language: $("lang").value }); location.reload(); });
 $("domains").addEventListener("input", saveAccessSoon);
 $("timeout").addEventListener("input", saveAccessSoon);

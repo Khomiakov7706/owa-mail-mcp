@@ -46,6 +46,8 @@ class Settings:
     auth_type: str = "ntlm"
     allow_send: bool = False
     """`send_email` refuses to work unless this is on."""
+    allow_calendar: bool = False
+    """`cancel_meeting` and `reschedule_meeting` refuse to work unless this is on."""
     confirm_timeout: int = 50
     """Seconds the confirmation window waits. Most MCP clients give up on a call after 60."""
     ui_host: str = "127.0.0.1"
@@ -112,7 +114,7 @@ def _env_overrides() -> dict[str, Any]:
     for var, name in text.items():
         if env.get(var):
             out[name] = env[var].strip() if name != "password" else env[var]
-    for var, name in {"OWA_MAIL_ALLOW_SEND": "allow_send", "OWA_MAIL_OPEN_BROWSER": "open_browser"}.items():
+    for var, name in {"OWA_MAIL_ALLOW_SEND": "allow_send", "OWA_MAIL_ALLOW_CALENDAR": "allow_calendar", "OWA_MAIL_OPEN_BROWSER": "open_browser"}.items():
         raw = env.get(var, "").strip().lower()
         if raw:
             out[name] = raw in {"1", "true", "yes", "on"}

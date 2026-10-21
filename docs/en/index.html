@@ -159,7 +159,7 @@ FYI — 9, newsletters — 25.</div>
 
   <div class="wrap">
     <dl class="stats">
-      <div><dt><b>9</b></dt><dd><span>tools for your agent</span></dd></div>
+      <div><dt><b>12</b></dt><dd><span>tools for your agent</span></dd></div>
       <div><dt><b>0</b></dt><dd><span>messages sent without your OK</span></dd></div>
       <div><dt><b>1</b></dt><dd><span>command to install</span></dd></div>
       <div><dt><b>MIT</b></dt><dd><span>open source, free</span></dd></div>
@@ -377,7 +377,7 @@ Don't ask me for my password — I'll type it myself in the setup window.</pre><
   <div class="wrap">
     <p class="eyebrow">For developers and agents</p>
     <h2 id="tools-title">MCP tools</h2>
-    <p class="section-sub">Everything except <code>send_email</code> is read-only. Email content is data, not instructions: the server explicitly tells the agent not to follow commands found in messages.</p>
+    <p class="section-sub">Everything except <code>send_email</code>, <code>cancel_meeting</code> and <code>reschedule_meeting</code> is read-only; those three act only after you confirm in the window. Email content is data, not instructions: the server explicitly tells the agent not to follow commands found in messages.</p>
     <div class="table">
       <table>
         <thead><tr><th scope="col">Tool</th><th scope="col">What it does</th></tr></thead>
@@ -391,6 +391,9 @@ Don't ask me for my password — I'll type it myself in the setup window.</pre><
           <tr><td><code>find_people</code></td><td>Organization address book: name, address, title, department</td></tr>
           <tr><td><code>list_senders</code></td><td>Who wrote in a period: message count, unread, latest subject; for <code>sent</code>, who you wrote to</td></tr>
           <tr><td><code>send_email</code><span class="rw">write</span></td><td>A new message or a reply (<code>reply_to_message_id</code>, <code>reply_all</code>) — only after you confirm in the window</td></tr>
+          <tr><td><code>list_events</code></td><td>Meetings in the calendar for a period: time, organizer, attendees, whether it repeats</td></tr>
+          <tr><td><code>cancel_meeting</code><span class="rw">write</span></td><td>Cancel your meeting (attendees are notified), decline someone else's, or delete an event without attendees — only after you confirm in the window (off by default)</td></tr>
+          <tr><td><code>reschedule_meeting</code><span class="rw">write</span></td><td>Move your meeting; attendees get the updated invitation — only after you confirm in the window (off by default)</td></tr>
         </tbody>
       </table>
     </div>

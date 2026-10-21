@@ -159,7 +159,7 @@
 
   <div class="wrap">
     <dl class="stats">
-      <div><dt><b>9</b></dt><dd><span>个智能体工具</span></dd></div>
+      <div><dt><b>12</b></dt><dd><span>个智能体工具</span></dd></div>
       <div><dt><b>0</b></dt><dd><span>封未经你“发送”的邮件</span></dd></div>
       <div><dt><b>1</b></dt><dd><span>条命令完成安装</span></dd></div>
       <div><dt><b>MIT</b></dt><dd><span>开源，免费</span></dd></div>
@@ -377,7 +377,7 @@ owa-mail-mcp setup</pre><button class="copy" type="button" data-copy="#c-win">�
   <div class="wrap">
     <p class="eyebrow">面向开发者和智能体</p>
     <h2 id="tools-title">MCP 工具</h2>
-    <p class="section-sub">除 <code>send_email</code> 外，所有工具都是只读的。邮件内容是数据而不是指令：服务器会明确告诉智能体不要执行邮件中的命令。</p>
+    <p class="section-sub">除 <code>send_email</code>、<code>cancel_meeting</code> 和 <code>reschedule_meeting</code> 外，所有工具都是只读的；这三个工具只有在你于确认窗口中确认后才会执行。邮件内容是数据而不是指令：服务器会明确告诉智能体不要执行邮件中的命令。</p>
     <div class="table">
       <table>
         <thead><tr><th scope="col">工具</th><th scope="col">作用</th></tr></thead>
@@ -391,6 +391,9 @@ owa-mail-mcp setup</pre><button class="copy" type="button" data-copy="#c-win">�
           <tr><td><code>find_people</code></td><td>组织通讯录：姓名、地址、职位、部门</td></tr>
           <tr><td><code>list_senders</code></td><td>某段时间内的发件人：邮件数、未读数、最近主题；对 <code>sent</code> 则列出你发信的对象</td></tr>
           <tr><td><code>send_email</code><span class="rw">写入</span></td><td>新邮件或回复（<code>reply_to_message_id</code>、<code>reply_all</code>），须在确认窗口中确认后才发送</td></tr>
+          <tr><td><code>list_events</code></td><td>某段时间内的日历会议：时间、组织者、参会人、是否重复</td></tr>
+          <tr><td><code>cancel_meeting</code><span class="rw">写入</span></td><td>取消你组织的会议（参会人会收到通知）、拒绝别人的会议，或删除没有参会人的事件；须在确认窗口中确认（默认关闭）</td></tr>
+          <tr><td><code>reschedule_meeting</code><span class="rw">写入</span></td><td>改期你组织的会议，参会人会收到更新后的邀请；须在确认窗口中确认（默认关闭）</td></tr>
         </tbody>
       </table>
     </div>

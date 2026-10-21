@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Protocol
 
-from .models import Message, MessageSummary, Outgoing, Person
+from .models import Event, Message, MessageSummary, Outgoing, Person
 
 FolderScope = Literal["inbox", "sent", "inbox_and_sent", "all"]
 
@@ -101,3 +101,21 @@ class MailBackend(Protocol):
     def send(self, message: Outgoing) -> str | None:
         """Sends and saves to Sent Items. Returns the sent copy's id when the server reports one."""
         ...
+
+    # --- calendar ----------------------------------------------------------------------------
+
+    def list_events(self, start: datetime, end: datetime, limit: int) -> list[Event]:
+        """Calendar entries overlapping [start, end), repeating meetings expanded into occurrences, earliest first."""
+        ...
+
+    def get_event(self, event_id: str) -> Event: ...
+
+    def cancel_event(self, event_id: str, message: str) -> str:
+        """Organizer: cancels the meeting and notifies the attendees (`cancelled`). Attendee: declines it and
+        tells the organizer (`declined`). A plain appointment is deleted (`deleted`)."""
+        ...
+
+    def reschedule_event(self, event_id: str, start: datetime, end: datetime) -> None:
+        """Moves the event; for a meeting the attendees get the updated invitation. Organizer only."""
+        ...
+

@@ -117,7 +117,7 @@ OpenCode and Kilo Code ignore `mcpServers`: use their `mcp` format.
    > 1. Type your password there. I will not see it; it is saved in your system keychain.
    > 2. Click **Test connection**. You should see your name and your latest emails. Then click **Save**.
    > 3. If the window asks whether to trust the server's certificate or to allow outdated encryption settings, decide yourself; ask your IT department if unsure.
-   > 4. Sending is off: I can only read mail. If you want me to send emails, turn on **Allow sending**. Every email will still wait for your click in a confirmation window.
+   > 4. Sending and meeting changes are off: I can only read. If you want me to send emails or cancel and move meetings, turn on **Allow sending** and/or **Allow changing meetings**. Every email and every change will still wait for your click in a confirmation window.
    > 5. Click **Done** at the bottom.
 
 4. **Wait for the result** without asking the user repeatedly. Check every 10 seconds, for up to 10 minutes:
@@ -170,7 +170,7 @@ The first paragraph is the explanation; the lines below show the DNS address, th
 | outdated TLS settings | old server or gateway | the setup window offers to allow them for this server only; the user decides |
 | the server is `outlook.office365.com` / Microsoft 365 | Exchange Online: password sign-in to EWS is disabled there | not supported; stop and say so |
 | a tool says the server process runs old code | the program was updated after the client started it | restart the client (step 5) |
-| sending is turned off | the user has not allowed it | they can turn on Allow sending in the setup window; settings apply without a restart |
+| sending is turned off / changing meetings is turned off | the user has not allowed it | they can turn on Allow sending / Allow changing meetings in the setup window; settings apply without a restart |
 
 ## Later
 

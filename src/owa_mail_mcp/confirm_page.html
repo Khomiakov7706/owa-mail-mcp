@@ -54,6 +54,8 @@ textarea { min-height: 220px; resize: vertical; }
 .s.sent { color: var(--ok); } .s.failed, .s.expired { color: var(--danger); } .s.rejected, .s.cancelled { color: var(--muted); }
 .empty { color: var(--muted); text-align: center; padding: 32px 0; }
 h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 26px 0 8px; }
+.old { text-decoration: line-through; color: var(--muted); }
+.new { font-weight: 600; color: var(--ok); }
 .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 </style>
 </head>
@@ -110,7 +112,40 @@ async function decide(id, action, edits) {
   refresh(true);
 }
 
+const when = (iso) => new Date(iso).toLocaleString(document.documentElement.lang, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const timeOnly = (iso) => new Date(iso).toLocaleTimeString(document.documentElement.lang, { hour: "2-digit", minute: "2-digit" });
+const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+const span = (start, end) => start ? when(start) + " – " + (end ? (sameDay(start, end) ? timeOnly(end) : when(end)) : "") : "";
+
+function actionCard(item) {
+  const a = item.action, ev = a.event;
+  const timer = el("span", { class: "timer" + (item.seconds_left <= 10 ? " low" : ""), "data-id": item.id }, T("seconds", { n: item.seconds_left }));
+  const people = (ev.attendees || []).map(p => p.email || p.name).filter(Boolean);
+  const card = el("div", { class: "card pending" },
+    el("div", { class: "top" }, el("div", { class: "who" }, T("asks_" + a.kind, { client: item.client || T("mcp_client") })), timer),
+    el("div", {},
+      el("div", { class: "row" }, el("div", { class: "k" }, T("meeting")), el("div", { class: "subject" }, ev.subject)),
+      el("div", { class: "row" }, el("div", { class: "k" }, T("when")),
+        el("div", { class: a.kind === "reschedule" ? "old" : "" }, span(ev.start, ev.end))),
+      a.kind === "reschedule" ? el("div", { class: "row" }, el("div", { class: "k" }, T("new_time")), el("div", { class: "new" }, span(a.new_start, a.new_end))) : null,
+      ev.organizer && !ev.i_am_organizer ? el("div", { class: "row" }, el("div", { class: "k" }, T("organizer")), el("div", {}, ev.organizer.name || ev.organizer.email)) : null,
+      people.length ? el("div", { class: "row" }, el("div", { class: "k" }, T("attendees")), chips(people, item.external)) : null,
+      a.note ? el("pre", { class: "body" }, a.note) : null));
+  const notes = [
+    ...(a.kind === "cancel" ? [T("notify_cancel")] : a.kind === "decline" ? [T("notify_decline")] : a.kind === "reschedule" && people.length ? [T("notify_reschedule")] : []),
+    ...(item.external.length ? [T("external_count", { n: item.external.length })] : []),
+    ...(ev.repeats ? [T("only_occurrence")] : []),
+  ];
+  if (notes.length) card.append(el("div", { class: "warn" }, el("ul", {}, notes.map(w => el("li", {}, w)))));
+  card.append(el("div", { class: "actions" },
+    el("button", { class: "primary", onclick: (e) => { e.target.disabled = true; decide(item.id, "approve"); } }, T("do_" + a.kind)),
+    el("button", { onclick: () => decide(item.id, "reject") }, T("dont_change"))));
+  if (errors.has(item.id)) card.append(el("div", { class: "err" }, errors.get(item.id)));
+  return card;
+}
+
 function pendingCard(item) {
+  if (item.action) return actionCard(item);
   const m = item.message;
   const draft = editing.get(item.id);
   const timer = el("span", { class: "timer" + (item.seconds_left <= 10 ? " low" : ""), "data-id": item.id }, T("seconds", { n: item.seconds_left }));
@@ -155,6 +190,13 @@ function pendingCard(item) {
 }
 
 function historyRow(item) {
+  if (item.action) {
+    const a = item.action;
+    const status = item.status === "sent" ? T("done_" + a.kind) : I18N["confirm.action_" + item.status] || I18N["confirm.status_" + item.status] || item.status;
+    return el("div", { class: "card done" },
+      el("div", { class: "ell" }, el("span", { class: "subject" }, a.event.subject), " · ", span(a.new_start || a.event.start, a.new_end || a.event.end)),
+      el("div", { class: "s " + item.status }, status, item.error ? `: ${item.error}` : ""));
+  }
   const m = item.message;
   return el("div", { class: "card done" },
     el("div", { class: "ell" }, el("span", { class: "subject" }, m.subject), " → ", m.to.join(", "), item.edited ? T("edited_suffix") : ""),

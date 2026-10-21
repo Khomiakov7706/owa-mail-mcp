@@ -9,7 +9,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 
 from .backend import AttachmentData, BackendError, FolderScope, SearchQuery, SearchResult, pick_attachment
-from .models import Message, MessageSummary, Outgoing, Person
+from .models import Event, Message, MessageSummary, Outgoing, Person
 from .text import preview
 from .when import now
 
@@ -61,6 +61,18 @@ class DemoBackend:
         add(maria, [ME], "Отпуск в ноябре", "Иван, подтвердите, пожалуйста, ваш отпуск с 10 по 21 ноября до конца недели.", 20, is_read=False, conv="c-vacation")
         add(john, [ME], "Contract renewal 2027", "Hi Ivan,\n\nOur contract expires on Dec 31. Could we schedule a call next week to discuss renewal terms?\n\nBest,\nJohn", 8, is_read=False, conv="c-contract")
         add(oleg, [ME], "Инцидент в проде: разбор", "Коротко: в 02:10 упал платёжный шлюз, восстановили за 40 минут. Постмортем в приложении.", 30, conv="c-incident", attachments=["postmortem.txt"])
+        day = ref.replace(hour=0, minute=0, second=0, microsecond=0)
+        at = lambda days, hour, minute=0: day + timedelta(days=days, hours=hour, minutes=minute)  # noqa: E731
+        self.events: list[Event] = [
+            Event(id="ev-1", subject="1:1 с Олегом", start=at(1, 11), end=at(1, 11, 30), location="Переговорная 4",
+                  organizer=ME, is_organizer=True, attendees=[oleg], is_meeting=True),
+            Event(id="ev-2", subject="Бюджет Q4: обсуждение", start=at(2, 15), end=at(2, 16), location="Teams",
+                  organizer=anna, is_organizer=False, attendees=[anna, oleg], is_meeting=True, my_response="Accept"),
+            Event(id="ev-3", subject="Синк по релизу 3.2", start=at(3, 10), end=at(3, 10, 30), organizer=ME, is_organizer=True,
+                  attendees=[anna, oleg], is_meeting=True, kind="occurrence"),
+            Event(id="ev-4", subject="Фокус-время", start=at(1, 14), end=at(1, 16), organizer=ME, is_organizer=True),
+        ]
+        self.calendar_log: list[tuple[str, str]] = []
         self.files = {
             "postmortem.txt": ("text/plain", "Постмортем\n02:10 — отказ платёжного шлюза.\n02:50 — восстановлено.\nПричина: истёк сертификат.".encode()),
             "budget_q4.xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", b"PK..."),
@@ -155,6 +167,39 @@ class DemoBackend:
             )
             self.messages.append(msg)
             return msg.id
+
+
+    # --- calendar ----------------------------------------------------------------------------
+
+    def list_events(self, start: datetime, end: datetime, limit: int) -> list[Event]:
+        with self._lock:
+            found = [replace(e) for e in self.events if e.start < end and e.end > start]
+        return sorted(found, key=lambda e: e.start)[:limit]
+
+    def get_event(self, event_id: str) -> Event:
+        with self._lock:
+            for e in self.events:
+                if e.id == event_id:
+                    return replace(e)
+        raise BackendError("No calendar event with this event_id. Take ids from list_events.")
+
+    def cancel_event(self, event_id: str, message: str) -> str:
+        event = self.get_event(event_id)
+        outcome = "deleted" if not event.is_meeting else "cancelled" if event.is_organizer else "declined"
+        with self._lock:
+            self.events = [e for e in self.events if e.id != event_id]
+            self.calendar_log.append((outcome, event_id))
+        return outcome
+
+    def reschedule_event(self, event_id: str, start: datetime, end: datetime) -> None:
+        event = self.get_event(event_id)
+        if event.is_meeting and not event.is_organizer:
+            raise BackendError("Only the organizer can move this meeting. Offer the user to write to the organizer instead.")
+        with self._lock:
+            for e in self.events:
+                if e.id == event_id:
+                    e.start, e.end = start, end
+            self.calendar_log.append(("moved", event_id))
 
 
 def _person_matches(person: Person | None, needle: str) -> bool:

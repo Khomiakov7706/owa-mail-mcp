@@ -61,7 +61,7 @@ class ConfirmationUI:
         if action not in {"approve", "reject"}:
             return 400, {"error": "bad action"}
         edited = None
-        if action == "approve" and isinstance(data.get("edits"), dict):
+        if action == "approve" and isinstance(data.get("edits"), dict) and _is_email(self.broker, proposal_id):
             try:
                 edited = _edited_message(self.broker, proposal_id, data["edits"])
             except KeyError:
@@ -70,6 +70,13 @@ class ConfirmationUI:
         if error:
             return 409, {"error": error, "code": getattr(error, "code", ""), "params": getattr(error, "params", {})}
         return 200, {"ok": True}
+
+
+def _is_email(broker: ConfirmationBroker, proposal_id: str) -> bool:
+    try:
+        return broker.get(proposal_id).message is not None
+    except KeyError:
+        return False
 
 
 def _edited_message(broker: ConfirmationBroker, proposal_id: str, edits: dict[str, Any]) -> Outgoing:

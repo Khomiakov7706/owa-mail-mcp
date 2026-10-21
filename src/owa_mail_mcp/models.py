@@ -93,3 +93,46 @@ class Outgoing:
     def fingerprint(self) -> tuple:
         norm = lambda xs: tuple(sorted(x.lower() for x in xs))  # noqa: E731
         return (norm(self.to), norm(self.cc), norm(self.bcc), self.subject.strip(), self.body.strip(), self.reply_to_id)
+
+
+@dataclass
+class Event:
+    """A calendar entry; one occurrence when the meeting repeats."""
+
+    id: str
+    subject: str
+    start: datetime | None
+    end: datetime | None
+    is_all_day: bool = False
+    location: str = ""
+    organizer: Person | None = None
+    is_organizer: bool = False
+    """The user organizes it: they can move or cancel it for everyone. Otherwise they can only decline."""
+    attendees: list[Person] = field(default_factory=list)
+    is_meeting: bool = False
+    """It has attendees besides the user; a plain appointment has none."""
+    kind: str = "single"
+    """`single`, `occurrence` or `exception` (one occurrence of a repeating meeting)."""
+    is_cancelled: bool = False
+    my_response: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {
+            "event_id": self.id,
+            "subject": self.subject,
+            "start": _iso(self.start),
+            "end": _iso(self.end),
+            "organizer": self.organizer.to_dict() if self.organizer else None,
+            "i_am_organizer": self.is_organizer,
+            "attendees": [p.to_dict() for p in self.attendees],
+            "repeats": self.kind in ("occurrence", "exception"),
+        }
+        if self.is_all_day:
+            out["all_day"] = True
+        if self.location:
+            out["location"] = self.location
+        if self.is_cancelled:
+            out["cancelled"] = True
+        if self.my_response and not self.is_organizer:
+            out["my_response"] = self.my_response
+        return out
