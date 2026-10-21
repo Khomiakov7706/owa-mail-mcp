@@ -128,11 +128,13 @@ function actionCard(item) {
       el("div", { class: "row" }, el("div", { class: "k" }, T("when")),
         el("div", { class: a.kind === "reschedule" ? "old" : "" }, span(ev.start, ev.end))),
       a.kind === "reschedule" ? el("div", { class: "row" }, el("div", { class: "k" }, T("new_time")), el("div", { class: "new" }, span(a.new_start, a.new_end))) : null,
+      ev.location ? el("div", { class: "row" }, el("div", { class: "k" }, T("location")), el("div", {}, ev.location)) : null,
       ev.organizer && !ev.i_am_organizer ? el("div", { class: "row" }, el("div", { class: "k" }, T("organizer")), el("div", {}, ev.organizer.name || ev.organizer.email)) : null,
       people.length ? el("div", { class: "row" }, el("div", { class: "k" }, T("attendees")), chips(people, item.external)) : null,
       a.note ? el("pre", { class: "body" }, a.note) : null));
   const notes = [
-    ...(a.kind === "cancel" ? [T("notify_cancel")] : a.kind === "decline" ? [T("notify_decline")] : a.kind === "reschedule" && people.length ? [T("notify_reschedule")] : []),
+    ...(a.kind === "cancel" ? [T("notify_cancel")] : a.kind === "decline" ? [T("notify_decline")]
+        : a.kind === "reschedule" && people.length ? [T("notify_reschedule")] : a.kind === "create" && people.length ? [T("notify_create")] : []),
     ...(item.external.length ? [T("external_count", { n: item.external.length })] : []),
     ...(ev.repeats ? [T("only_occurrence")] : []),
   ];
@@ -194,7 +196,8 @@ function pendingCard(item) {
 function historyRow(item) {
   if (item.action) {
     const a = item.action;
-    const status = item.status === "sent" ? T("done_" + a.kind) : I18N["confirm.action_" + item.status] || I18N["confirm.status_" + item.status] || item.status;
+    const status = item.status === "sent" ? T("done_" + a.kind) + (item.via === "chat" ? " · " + T("status_sent_chat") : "")
+      : I18N["confirm.action_" + item.status] || I18N["confirm.status_" + item.status] || item.status;
     return el("div", { class: "card done" },
       el("div", { class: "ell" }, el("span", { class: "subject" }, a.event.subject), " · ", span(a.new_start || a.event.start, a.new_end || a.event.end)),
       el("div", { class: "s " + item.status }, status, item.error ? `: ${item.error}` : ""));

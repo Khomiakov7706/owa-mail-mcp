@@ -54,6 +54,12 @@ button:disabled { opacity: .5; cursor: default; }
 .switch input { width: 18px; height: 18px; margin-top: 2px; flex: none; }
 .switch b { display: block; }
 .switch + .switch { margin-top: 14px; }
+h3.block { font-size: 14px; margin: 22px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+h3.block.first { border-top: 0; padding-top: 0; margin-top: 8px; }
+.nested { margin: 12px 0 0 30px; }
+.nested.off { opacity: .45; pointer-events: none; }
+fieldset { border: 0; padding: 0; margin: 14px 0 0; }
+legend { font-size: 13px; font-weight: 600; padding: 0; margin-bottom: 8px; }
 .warn { background: var(--warn-bg); color: var(--warn-text); border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-top: 14px; }
 .client { border-top: 1px solid var(--line); padding: 12px 0; }
 .client:first-of-type { border-top: 0; padding-top: 4px; }
@@ -131,15 +137,11 @@ footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 2
   <section class="card">
     <h2>{{t:setup.s2_title}} <span class="saved" id="access-saved">{{t:setup.saved}}</span></h2>
     <p class="lead">{{t:setup.s2_lead}}</p>
+    <h3 class="block first">{{t:setup.mail_block}}</h3>
     <div class="switch">
       <input type="checkbox" id="allow-send">
       <label class="plain" for="allow-send"><b>{{t:setup.allow_send}}</b>
         <span class="hint">{{t:setup.allow_send_hint}}</span></label>
-    </div>
-    <div class="switch">
-      <input type="checkbox" id="allow-calendar">
-      <label class="plain" for="allow-calendar"><b>{{t:setup.allow_calendar}}</b>
-        <span class="hint">{{t:setup.allow_calendar_hint}}</span></label>
     </div>
     <div class="switch">
       <input type="checkbox" id="allow-organize">
@@ -150,6 +152,27 @@ footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 2
     <textarea id="trusted" rows="3" placeholder="anna.smirnova@company.com" spellcheck="false"></textarea>
     <div class="hint">{{t:setup.trusted_hint}}</div>
     <div class="msg err" id="access-error"></div>
+    <h3 class="block">{{t:setup.calendar_block}}</h3>
+    <div class="switch">
+      <input type="checkbox" id="calendar-enabled">
+      <label class="plain" for="calendar-enabled"><b>{{t:setup.calendar_enabled}}</b>
+        <span class="hint">{{t:setup.calendar_enabled_hint}}</span></label>
+    </div>
+    <div class="nested" id="calendar-options">
+      <div class="switch">
+        <input type="checkbox" id="allow-calendar">
+        <label class="plain" for="allow-calendar"><b>{{t:setup.allow_calendar}}</b>
+          <span class="hint">{{t:setup.allow_calendar_hint}}</span></label>
+      </div>
+      <fieldset id="calendar-confirm">
+        <legend>{{t:setup.calendar_confirm}}</legend>
+        <div class="switch"><input type="radio" name="calendar-confirm" id="confirm-window" value="window">
+          <label class="plain" for="confirm-window"><b>{{t:setup.confirm_window}}</b><span class="hint">{{t:setup.confirm_window_hint}}</span></label></div>
+        <div class="switch"><input type="radio" name="calendar-confirm" id="confirm-chat" value="chat">
+          <label class="plain" for="confirm-chat"><b>{{t:setup.confirm_chat}}</b><span class="hint">{{t:setup.confirm_chat_hint}}</span></label></div>
+      </fieldset>
+    </div>
+    <h3 class="block">{{t:setup.other_block}}</h3>
     <label for="domains">{{t:setup.domains}} <span class="hint">{{t:setup.domains_note}}</span></label>
     <input type="text" id="domains" placeholder="company.ru, company.com" spellcheck="false">
     <div class="hint">{{t:setup.domains_hint}}</div>
@@ -222,6 +245,9 @@ function fillForm(s) {
   $("password-hint").textContent = s.password_stored ? T("password_stored_hint") : "";
   fillLanguages(s);
   $("allow-send").checked = s.access.allow_send; $("allow-calendar").checked = s.access.allow_calendar;
+  $("calendar-enabled").checked = s.access.calendar_enabled;
+  $(s.access.calendar_confirm === "chat" ? "confirm-chat" : "confirm-window").checked = true;
+  $("calendar-options").classList.toggle("off", !s.access.calendar_enabled);
   $("allow-organize").checked = s.access.allow_organize; $("trusted").value = s.access.trusted_recipients; $("domains").value = s.access.internal_domains; $("timeout").value = s.access.confirm_timeout;
 }
 
@@ -366,6 +392,7 @@ function saveAccessSoon() {
   accessTimer = setTimeout(async () => {
     const r = await api("api/access", { allow_send: $("allow-send").checked, allow_calendar: $("allow-calendar").checked,
       allow_organize: $("allow-organize").checked, trusted_recipients: $("trusted").value,
+      calendar_enabled: $("calendar-enabled").checked, calendar_confirm: $("confirm-chat").checked ? "chat" : "window",
       internal_domains: $("domains").value, confirm_timeout: Number($("timeout").value) });
     $("access-error").textContent = r.ok ? "" : (r.error || "");
     if (r.ok) flash("access-saved");
@@ -384,6 +411,9 @@ for (const id of ["server", "email", "username", "password", "auth", "proxy"]) $
 $("allow-send").addEventListener("change", saveAccessSoon);
 $("allow-calendar").addEventListener("change", saveAccessSoon);
 $("allow-organize").addEventListener("change", saveAccessSoon);
+$("calendar-enabled").addEventListener("change", () => { $("calendar-options").classList.toggle("off", !$("calendar-enabled").checked); saveAccessSoon(); });
+$("confirm-window").addEventListener("change", saveAccessSoon);
+$("confirm-chat").addEventListener("change", saveAccessSoon);
 $("trusted").addEventListener("input", saveAccessSoon);
 $("lang").addEventListener("change", async () => { await api("api/language", { language: $("lang").value }); location.reload(); });
 $("domains").addEventListener("input", saveAccessSoon);

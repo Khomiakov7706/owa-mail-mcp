@@ -43,7 +43,7 @@ from exchangelib.errors import (
 )
 from exchangelib.items import Message as _EwsMessageType
 from exchangelib.attachments import FileAttachment
-from exchangelib.properties import ItemId
+from exchangelib.properties import Attendee, ItemId
 from exchangelib.protocol import BaseProtocol
 from exchangelib.transport import BASIC, DIGEST, GSSAPI, NTLM, SSPI
 
@@ -694,6 +694,16 @@ class EWSBackend:
             return "cancelled"
         self._call(lambda: item.decline(body=note))
         return "declined"
+
+    def create_event(self, subject: str, start: datetime, end: datetime, attendees: list[str], location: str, body: str) -> Event:
+        a = self.account
+        item = CalendarItem(
+            account=a, folder=a.calendar, subject=subject, start=_ews_dt(start), end=_ews_dt(end), location=location or None,
+            body=body or None, required_attendees=[Attendee(mailbox=Mailbox(email_address=x)) for x in attendees] or None,
+        )
+        invitations = "SendToAllAndSaveCopy" if attendees else "SendToNone"
+        self._call(lambda: item.save(send_meeting_invitations=invitations))
+        return self.get_event(item.id)
 
     def reschedule_event(self, event_id: str, start: datetime, end: datetime) -> None:
         item = self._event_item(event_id)

@@ -48,7 +48,7 @@ async def test_cancel_own_meeting_after_user_approves(make_server, backend):
         t.join()
         events = await _events(c)
     assert not r.is_error, r.content
-    assert r.structured_content == {"done": True, "outcome": "cancelled", "subject": "1:1 с Олегом", "attendees_notified": True}
+    assert r.structured_content == {"done": True, "outcome": "cancelled", "subject": "1:1 с Олегом", "attendees_notified": True, "confirmed_in": "window"}
     card = seen[0]
     assert card["message"] is None and card["action"]["kind"] == "cancel" and card["action"]["note"] == "Перенесём на следующую неделю."
     assert backend.calendar_log == [("cancelled", "ev-1")] and "1:1 с Олегом" not in events
@@ -195,3 +195,87 @@ def test_exchange_reschedule_sends_updates_only_for_meetings(monkeypatch):
     with pytest.raises(Exception, match="Only the organizer"):
         _ews(monkeypatch, invited).reschedule_event("AAMk=", new, new + timedelta(minutes=30))
     assert invited.calls == []
+
+
+async def test_whole_calendar_can_be_turned_off(backend):
+    mcp, _ = build_server(Settings(backend="demo", calendar_enabled=False, allow_calendar=True), backend)
+    async with Client(mcp) as c:
+        listed = await c.call_tool("list_events", {})
+        created = await c.call_tool("create_meeting", {"subject": "x", "start": "2030-01-10T10:00"})
+        cancelled = await c.call_tool("cancel_meeting", {"event_id": "ev-1"})
+    assert all(r.is_error and "calendar is turned off" in r.content[0].text for r in (listed, created, cancelled))
+    assert backend.calendar_log == []
+
+
+async def test_create_meeting_after_window_approval(make_server, backend):
+    mcp, tools = make_server(allow_calendar=True)
+    start = (now() + timedelta(days=5)).replace(hour=12, minute=0, second=0, microsecond=0)
+    seen = []
+    async with Client(mcp) as c:
+        t = answer(tools, "approve", seen=seen)
+        r = await c.call_tool("create_meeting", {"subject": "  Ретро  по релизу ", "start": start.strftime("%Y-%m-%dT%H:%M"),
+                                                 "duration_minutes": 45, "attendees": ["anna.smirnova@example.com", "John.Doe@partner.org"],
+                                                 "location": "Переговорная 2", "agenda": "Что прошло хорошо, что нет."})
+        t.join()
+        bad = await c.call_tool("create_meeting", {"subject": "x", "start": start.strftime("%Y-%m-%dT%H:%M"), "attendees": ["анна"]})
+    assert not r.is_error, r.content
+    out = r.structured_content
+    assert out["outcome"] == "created" and out["invitations_sent"] is True and out["confirmed_in"] == "window"
+    created = backend.get_event(out["event_id"])
+    assert created.subject == "Ретро по релизу" and created.end - created.start == timedelta(minutes=45)
+    card = seen[0]
+    assert card["action"]["kind"] == "create" and card["action"]["event"]["location"] == "Переговорная 2"
+    assert card["external"] == ["John.Doe@partner.org"]
+    assert bad.is_error and "Not a plain email address" in bad.content[0].text
+
+
+def _chat(answer_value, asked):
+    from mcp import types
+
+    async def elicit(context, params):
+        asked.append(params.message)
+        if answer_value is None:
+            return types.ElicitResult(action="cancel")
+        return types.ElicitResult(action="accept", content={"confirm": answer_value})
+
+    return elicit
+
+
+@pytest.mark.parametrize("mode", ["auto", "legacy"])  # the 2026 input-required round trip, and the older mid-call request
+async def test_chat_confirmation_asks_through_the_client(make_server, backend, mode):
+    mcp, tools = make_server(allow_calendar=True, calendar_confirm="chat")
+    asked = []
+    async with Client(mcp, elicitation_callback=_chat(True, asked), mode=mode) as c:
+        r = await c.call_tool("cancel_meeting", {"event_id": "ev-1", "message": "Перенесём"})
+    assert not r.is_error, r.content
+    assert r.structured_content["confirmed_in"] == "chat" and backend.calendar_log == [("cancelled", "ev-1")]
+    assert "1:1 с Олегом" in asked[0] and "Перенесём" in asked[0]
+    history = tools.broker.snapshot()[0]
+    assert history["via"] == "chat" and history["status"] == "sent"
+
+
+@pytest.mark.parametrize("reply", [False, None])
+async def test_chat_no_or_dismissed_changes_nothing(make_server, backend, reply):
+    mcp, tools = make_server(allow_calendar=True, calendar_confirm="chat")
+    async with Client(mcp, elicitation_callback=_chat(reply, [])) as c:
+        r = await c.call_tool("reschedule_meeting", {"event_id": "ev-1", "new_start": "2030-01-10T10:00"})
+    assert r.is_error and "Nothing was changed" in r.content[0].text
+    assert backend.calendar_log == []
+
+
+async def test_chat_mode_falls_back_to_the_window_when_the_client_cannot_ask(make_server, backend):
+    mcp, tools = make_server(allow_calendar=True, calendar_confirm="chat")
+    async with Client(mcp) as c:  # no elicitation support declared
+        t = answer(tools, "approve")
+        r = await c.call_tool("cancel_meeting", {"event_id": "ev-4"})
+        t.join()
+    assert r.structured_content["confirmed_in"] == "window" and r.structured_content["outcome"] == "deleted"
+
+
+async def test_create_meeting_confirmed_in_chat(make_server, backend):
+    mcp, tools = make_server(allow_calendar=True, calendar_confirm="chat")
+    asked = []
+    async with Client(mcp, elicitation_callback=_chat(True, asked), mode="legacy") as c:
+        r = await c.call_tool("create_meeting", {"subject": "Синк", "start": "2030-01-10T10:00", "attendees": ["oleg.kuznetsov@example.com"]})
+    assert r.structured_content["confirmed_in"] == "chat" and "Синк" in asked[0] and "oleg.kuznetsov@example.com" in asked[0]
+    assert backend.get_event(r.structured_content["event_id"]).attendees[0].email == "oleg.kuznetsov@example.com"

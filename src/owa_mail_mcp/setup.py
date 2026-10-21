@@ -168,6 +168,8 @@ class SetupApp:
                 "allow_send": settings.allow_send,
                 "allow_calendar": settings.allow_calendar,
                 "allow_organize": settings.allow_organize,
+                "calendar_enabled": settings.calendar_enabled,
+                "calendar_confirm": settings.calendar_confirm,
                 "trusted_recipients": "\n".join(settings.trusted_recipients),
                 "internal_domains": ", ".join(settings.internal_domains),
                 "confirm_timeout": settings.confirm_timeout,
@@ -333,6 +335,8 @@ class SetupApp:
             settings = Settings.load(with_password=False)
             save_settings(replace(settings, allow_send=bool(data.get("allow_send")), allow_calendar=bool(data.get("allow_calendar")),
                                   allow_organize=bool(data.get("allow_organize")), trusted_recipients=tuple(trusted),
+                                  calendar_enabled=bool(data.get("calendar_enabled", settings.calendar_enabled)),
+                                  calendar_confirm="chat" if data.get("calendar_confirm", settings.calendar_confirm) == "chat" else "window",
                                   internal_domains=domains, confirm_timeout=timeout))
         return 200, {"ok": True}
 

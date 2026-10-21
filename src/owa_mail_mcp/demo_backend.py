@@ -249,6 +249,15 @@ class DemoBackend:
             self.calendar_log.append((outcome, event_id))
         return outcome
 
+    def create_event(self, subject: str, start: datetime, end: datetime, attendees: list[str], location: str, body: str) -> Event:
+        people = [_by_email.get(x, Person(email=x)) for x in attendees]
+        event = Event(id=f"ev-{next(self._ids)}", subject=subject, start=start, end=end, location=location, organizer=ME,
+                      is_organizer=True, attendees=people, is_meeting=bool(people))
+        with self._lock:
+            self.events.append(event)
+            self.calendar_log.append(("created", event.id))
+        return replace(event)
+
     def reschedule_event(self, event_id: str, start: datetime, end: datetime) -> None:
         event = self.get_event(event_id)
         if event.is_meeting and not event.is_organizer:

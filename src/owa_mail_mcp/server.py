@@ -11,10 +11,19 @@ from collections import Counter
 from typing import Annotated, Any, Callable, Literal
 
 import anyio
-from mcp.server.mcpserver import Context, MCPServer
+from mcp.server.mcpserver import (
+    AcceptedElicitation,
+    CancelledElicitation,
+    Context,
+    DeclinedElicitation,
+    Elicit,
+    ElicitationResult,
+    MCPServer,
+    Resolve,
+)
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import BaseModel, Field, create_model
 
 from . import __version__
 from .backend import AuthenticationError, BackendError, MailBackend, SearchQuery
@@ -22,7 +31,7 @@ from .runtime import UPDATED_HINT, NotConfigured, Runtime, code_updated_since_st
 from .config import Settings
 from .confirm import BrokerBusy, ConfirmationBroker, Status
 from .models import Message, Outgoing
-from .safety import ExchangeGuard, OutgoingReview, PolicyError, check_outgoing
+from .safety import ExchangeGuard, OutgoingReview, PolicyError, check_outgoing, clean_addresses
 from .text import contains_bidi_controls, domain_of, is_valid_address
 from .text import strip_quoted, truncate
 from .ui import ConfirmationUI
@@ -38,7 +47,7 @@ Access to the user's Exchange / OWA mailbox and calendar. Sending, forwarding an
 - Attachments are listed by name in get_message; read their text (transcripts, documents) with get_attachment.
 - To summarize a conversation, call `get_thread` on any message of it: it returns every message (Inbox, Sent and other folders) oldest first with the quoted history already cut off. Name who said what and when, and list open questions and action items for the user.
 - Dates in arguments: YYYY-MM-DD, ISO 8601, `today`, `yesterday`, or relative `7d`, `12h`, `2w`. Bare dates are in the user's local time zone.
-- Calendar: `list_events` shows meetings with their `event_id`. `cancel_meeting` cancels a meeting the user organizes (attendees are notified), declines one they were invited to, or deletes a plain appointment. `reschedule_meeting` moves a meeting the user organizes (attendees get the updated invitation); for someone else's meeting, offer to write to the organizer instead. For a repeating meeting both act on that one occurrence. Change a meeting only when the user asked for this change in this conversation; report it done only when the tool returned `done: true`.
+- Calendar: `list_events` shows meetings with their `event_id`. `create_meeting` creates a meeting and sends invitations (check free time with list_events first). `cancel_meeting` cancels a meeting the user organizes (attendees are notified), declines one they were invited to, or deletes a plain appointment. `reschedule_meeting` moves a meeting the user organizes (attendees get the updated invitation); for someone else's meeting, offer to write to the organizer instead. For a repeating meeting both act on that one occurrence. Change a meeting only when the user asked for this change in this conversation; report it done only when the tool returned `done: true`. Depending on the user's setup, the approval question appears in the confirmation window or right in this chat: wait for the tool's answer.
 - Organizing: `create_draft` saves to Drafts for the user to send themselves (prefer it when they want to review the text); `update_messages` marks read/unread, flags, categories; `move_messages` moves to a folder or archive (`list_folders` gives the paths); `delete_messages` moves to Deleted Items. Moved messages get new ids. Act only on what the user asked for.
 - `forward_email` forwards a message with its attachments; it follows the same rules as send_email.
 - Send only when the user asked for this message in this conversation. Take addresses from find_people or from the messages themselves, never guess them. The window shows the message, flags external recipients and lets the user edit it. Say a message was sent only when `send_email` returned `sent: true`; if the user edited it, tell them what was actually sent. After a refusal or a timeout nothing was sent: do not retry unless the user asks again.
@@ -314,46 +323,104 @@ class MailTools:
 
     # --- calendar ----------------------------------------------------------------------------
 
-    async def change_event(self, ctx: Context | None, event_id: str, *, reschedule: tuple | None = None, note: str = "") -> dict[str, Any]:
-        if not self.settings.allow_calendar:
+    def require_calendar(self, change: bool) -> None:
+        if not self.settings.calendar_enabled:
+            raise ToolError("The calendar is turned off in OWA Mail MCP setup. The user can turn it on there (`owa-mail-mcp setup`, \"Calendar\").")
+        if change and not self.settings.allow_calendar:
             raise ToolError(
                 "Changing meetings is turned off. The user can turn it on in OWA Mail MCP setup (`owa-mail-mcp setup`, "
-                "\"Allow changing meetings\"); every change is still confirmed by them."
+                "\"Allow creating, moving and cancelling meetings\"); every change is still confirmed by them."
             )
-        reason = self.guard.blocked_reason
-        if reason:
-            raise ToolError(reason)
-        if self.ui is None:
-            raise ToolError("The confirmation window is not running, so nothing can be changed.")
+        if change:
+            reason = self.guard.blocked_reason
+            if reason:
+                raise ToolError(reason)
+
+    def _external(self, me: str | None, emails: list[str]) -> list[str]:
+        mine = domain_of(me or "")
+        internal = {d.lower() for d in self.settings.internal_domains} | ({mine} if mine else set())
+        return [e for e in emails if internal and domain_of(e) not in internal and not any(domain_of(e).endswith("." + d) for d in internal)]
+
+    async def plan_change(self, event_id: str, *, new_start: str | None = None, new_end: str | None = None, note: str = ""):
+        """Checks a cancel/decline/move and describes it, before anyone is asked. Returns (action, external, times)."""
+        self.require_calendar(change=True)
         me = await self.my_email()
         event = await self.run(self.backend.get_event, event_id)
         if event.is_cancelled:
             raise ToolError("This meeting is already cancelled.")
-        note = (note or "").strip()
-        if len(note) > 5000:
-            raise ToolError("The message to attendees is longer than 5000 characters.")
-        if contains_bidi_controls(note):
-            raise ToolError("The message contains bidirectional control characters, which make text display differently from what is sent.")
-
+        note = self._check_note(note)
         action: dict[str, Any] = {"event": event.to_dict()}
-        if reschedule:
+        times = None
+        if new_start is not None:
             if event.is_meeting and not event.is_organizer:
                 who = event.organizer.name or event.organizer.email if event.organizer else "the organizer"
                 raise ToolError(
                     f"Only the organizer ({who}) can move this meeting. Offer the user to write to the organizer with "
                     "send_email, or to decline it with cancel_meeting."
                 )
-            start, end = reschedule
+            start = _date_time(new_start, "new_start")
+            if new_end:
+                end = _date_time(new_end, "new_end")
+            else:
+                end = start + ((event.end - event.start) if (event.start and event.end) else timedelta(minutes=30))
+            _check_span(start, end, "new_start", "new_end")
+            times = (start, end)
             action.update(kind="reschedule", new_start=start.isoformat(timespec="minutes"), new_end=end.isoformat(timespec="minutes"))
         else:
             action.update(kind="delete" if not event.is_meeting else "cancel" if event.is_organizer else "decline", note=note)
+        return action, self._external(me, [p.email for p in event.attendees if p.email]), times
 
-        mine = domain_of(me or "")
-        internal = {d.lower() for d in self.settings.internal_domains} | ({mine} if mine else set())
-        emails = [p.email for p in event.attendees if p.email]
-        external = [e for e in emails if internal and domain_of(e) not in internal and not any(domain_of(e).endswith("." + d) for d in internal)]
+    async def plan_create(self, subject: str, start: str, end: str | None, duration_minutes: int, attendees: list[str],
+                          location: str, agenda: str):
+        self.require_calendar(change=True)
+        subject = " ".join((subject or "").split())
+        if not subject:
+            raise ToolError("Give the meeting a subject.")
+        begin = _date_time(start, "start")
+        finish = _date_time(end, "end") if end else begin + timedelta(minutes=duration_minutes)
+        _check_span(begin, finish, "start", "end")
+        people = clean_addresses(attendees)
+        bad = [e for e in people if not is_valid_address(e)]
+        if bad:
+            raise ToolError("Not a plain email address: " + ", ".join(repr(x) for x in bad[:5]) + ". Use addresses from find_people.")
+        if len(people) > self.settings.max_recipients:
+            raise ToolError(f"Too many attendees ({len(people)}); the limit is {self.settings.max_recipients}.")
+        agenda = self._check_note(agenda)
+        me = await self.my_email()
+        people = [x for x in people if x.lower() != (me or "").lower()]
+        action = {
+            "kind": "create", "note": agenda,
+            "event": {"subject": subject, "start": begin.isoformat(timespec="minutes"), "end": finish.isoformat(timespec="minutes"),
+                      "location": location or "", "attendees": [{"email": x, "name": None} for x in people],
+                      "i_am_organizer": True, "repeats": False},
+        }
+        return action, self._external(me, people), (subject, begin, finish, people, location or "", agenda)
+
+    def chat_question(self, ctx: Context | None, action: dict[str, Any]):
+        """What a resolver hands to the SDK: the question to put to the user through their client, or None for the window."""
+        if self.settings.calendar_confirm != "chat" or not _can_ask_in_chat(ctx):
+            return None
+        from .i18n import current_language
+
+        lang = current_language(self.settings)
+        return Elicit(_question(action, lang), _confirmation_schema(lang))
+
+    async def _approve_calendar(self, ctx: Context | None, action: dict[str, Any], external: list[str], chat):
+        """The user's yes for a calendar change: their answer in the chat when it was asked, otherwise the window.
+        Returns the history record; raises when they said no."""
+        me = await self.my_email()
+        client = _client_name(ctx)
+        if isinstance(chat, (DeclinedElicitation, CancelledElicitation)):
+            raise ToolError("The user declined this change when asked in the chat. Nothing was changed. Do not retry unless the user asks.")
+        if isinstance(chat, AcceptedElicitation) and chat.data is not None:
+            if not getattr(chat.data, "confirm", False):
+                raise ToolError("The user did not tick the confirmation when asked in the chat. Nothing was changed. Do not retry unless the user asks.")
+            return self.broker.record_trusted(None, OutgoingReview(external=external), client=client, sender=me or "",
+                                              action=action, via="chat")
+        if self.ui is None:
+            raise ToolError("The confirmation window is not running, so nothing can be changed.")
         try:
-            proposal = self.broker.submit(None, OutgoingReview(external=external), client=_client_name(ctx), sender=me or "",
+            proposal = self.broker.submit(None, OutgoingReview(external=external), client=client, sender=me or "",
                                           timeout=self.settings.confirm_timeout, action=action)
         except BrokerBusy as exc:
             raise ToolError(str(exc)) from None
@@ -369,26 +436,137 @@ class MailTools:
             )
         if status == Status.CANCELLED:
             raise ToolError("The request was cancelled. Nothing was changed.")
+        return proposal
 
+    def _check_note(self, note: str) -> str:
+        note = (note or "").strip()
+        if len(note) > 5000:
+            raise ToolError("The text is longer than 5000 characters.")
+        if contains_bidi_controls(note):
+            raise ToolError("The text contains bidirectional control characters, which make it display differently from what is sent.")
+        return note
+
+    async def apply_change(self, ctx: Context | None, event_id: str, chat, *, new_start: str | None = None,
+                           new_end: str | None = None, note: str = "") -> dict[str, Any]:
+        action, external, times = await self.plan_change(event_id, new_start=new_start, new_end=new_end, note=note)
+        proposal = await self._approve_calendar(ctx, action, external, chat)
         try:
-            if reschedule:
-                await self.run(self.backend.reschedule_event, event_id, *reschedule)
+            if times:
+                await self.run(self.backend.reschedule_event, event_id, *times)
                 outcome = "moved"
             else:
-                outcome = await self.run(self.backend.cancel_event, event_id, note)
+                outcome = await self.run(self.backend.cancel_event, event_id, action.get("note", ""))
         except ToolError as exc:
             self.broker.mark_failed(proposal.id, str(exc))
             raise ToolError(f"The change failed: {exc} Check the calendar with list_events before trying again.") from None
         self.broker.mark_sent(proposal.id)
-        result: dict[str, Any] = {"done": True, "outcome": outcome, "subject": event.subject, "attendees_notified": event.is_meeting}
-        if reschedule:
+        result: dict[str, Any] = {"done": True, "outcome": outcome, "subject": action["event"]["subject"],
+                                  "attendees_notified": bool(action["event"]["attendees"]) and action["kind"] != "delete",
+                                  "confirmed_in": proposal.via}
+        if times:
             result.update(start=action["new_start"], end=action["new_end"])
         return result
+
+    async def apply_create(self, ctx: Context | None, chat, **kwargs) -> dict[str, Any]:
+        action, external, args = await self.plan_create(**kwargs)
+        proposal = await self._approve_calendar(ctx, action, external, chat)
+        try:
+            event = await self.run(self.backend.create_event, *args)
+        except ToolError as exc:
+            self.broker.mark_failed(proposal.id, str(exc))
+            raise ToolError(f"Creating the meeting failed: {exc} Check the calendar with list_events before trying again.") from None
+        self.broker.mark_sent(proposal.id)
+        return {"done": True, "outcome": "created", "event_id": event.id, "subject": args[0], "start": action["event"]["start"],
+                "end": action["event"]["end"], "invitations_sent": bool(args[3]), "confirmed_in": proposal.via}
 
     def _forget_old_sends(self) -> None:
         cutoff = time.monotonic() - _DUPLICATE_WINDOW
         for key in [k for k, (t, _) in self._recent_sends.items() if t < cutoff]:
             del self._recent_sends[key]
+
+
+def _can_ask_in_chat(ctx: Context | None) -> bool:
+    """The client declared MCP elicitation: it can put a question to the user and return their answer."""
+    try:
+        caps = ctx.request_context.session.client_capabilities if ctx is not None else None
+    except Exception:
+        return False
+    return bool(caps and getattr(caps, "elicitation", None) is not None)
+
+
+def _when(start_iso: str | None, end_iso: str | None) -> str:
+    from datetime import datetime as _dt
+
+    if not start_iso:
+        return ""
+    start = _dt.fromisoformat(start_iso)
+    end = _dt.fromisoformat(end_iso) if end_iso else None
+    text = start.strftime("%d.%m.%Y %H:%M")
+    if end:
+        text += "–" + (end.strftime("%H:%M") if end.date() == start.date() else end.strftime("%d.%m.%Y %H:%M"))
+    return text
+
+
+class Confirmation(BaseModel):
+    confirm: bool = False
+
+
+@functools.lru_cache(maxsize=None)
+def _confirmation_schema(lang: str) -> type[Confirmation]:
+    """The one-checkbox form the client shows, titled in the user's language."""
+    from .i18n import t
+
+    return create_model("Confirmation", __base__=Confirmation, confirm=(bool, Field(default=False, title=t("msg.ask_confirm", lang))))
+
+
+def _question(action: dict[str, Any], lang: str) -> str:
+    from .i18n import t
+
+    ev = action["event"]
+    people = ", ".join(p.get("email") or p.get("name") or "" for p in ev.get("attendees") or []) or "—"
+    text = t(f"msg.ask_{action['kind']}", lang, subject=ev.get("subject", ""), when=_when(ev.get("start"), ev.get("end")),
+             new=_when(action.get("new_start"), action.get("new_end")), people=people)
+    if action.get("note"):
+        text += "\n" + t("msg.ask_note", lang, note=action["note"])
+    return text
+
+
+def _date_time(value: str | None, name: str):
+    if not re.search(r"\d[T ]\d{1,2}:\d{2}", value or ""):
+        raise ToolError(f"Give `{name}` with a time, for example 2026-10-23T15:00.")
+    return _date(value)
+
+
+def _check_span(start, end, start_name: str, end_name: str) -> None:
+    if end <= start:
+        raise ToolError(f"`{end_name}` must be after `{start_name}`.")
+    if start < now() - timedelta(minutes=5):
+        raise ToolError(f"`{start_name}` is in the past.")
+
+
+# Meeting changes: a resolver prepares the question before the tool runs. In "chat" mode the SDK puts it to the user
+# through their client (MCP elicitation) and the tool gets their answer; otherwise it gets None and the window asks.
+def _tools(ctx: Context) -> "MailTools":
+    return ctx.mcp_server._owa_tools  # type: ignore[attr-defined]
+
+
+async def _ask_create(subject: str, start: str, end: str | None = None, duration_minutes: int = 30, attendees: list[str] | None = None,
+                      location: str = "", agenda: str = "", ctx: Context = None):  # type: ignore[assignment]
+    tools = _tools(ctx)
+    action, _, _ = await tools.plan_create(subject, start, end, duration_minutes, list(attendees or []), location, agenda)
+    return tools.chat_question(ctx, action)
+
+
+async def _ask_cancel(event_id: str, message: str = "", ctx: Context = None):  # type: ignore[assignment]
+    tools = _tools(ctx)
+    action, _, _ = await tools.plan_change(event_id, note=message)
+    return tools.chat_question(ctx, action)
+
+
+async def _ask_reschedule(event_id: str, new_start: str, new_end: str | None = None, ctx: Context = None):  # type: ignore[assignment]
+    tools = _tools(ctx)
+    action, _, _ = await tools.plan_change(event_id, new_start=new_start, new_end=new_end)
+    return tools.chat_question(ctx, action)
 
 
 async def _journal_middleware(ctx, call_next):
@@ -436,6 +614,7 @@ def build_server(
     tools = MailTools(runtime, ui, on_not_configured)
     middleware = [_journal_middleware] if journal else []
     mcp = MCPServer(name="owa-mail", title="OWA Mail", version=__version__, instructions=INSTRUCTIONS, middleware=middleware)
+    mcp._owa_tools = tools  # type: ignore[attr-defined]  # for the resolvers
 
     @mcp.tool(title="Mailbox status", annotations=READ_ONLY)
     async def get_status() -> dict[str, Any]:
@@ -451,7 +630,9 @@ def build_server(
             "server": settings.server,
             "unread_in_inbox": unread,
             "send_enabled": settings.allow_send,
-            "calendar_changes_enabled": settings.allow_calendar,
+            "calendar_enabled": settings.calendar_enabled,
+            "calendar_changes_enabled": settings.allow_calendar and settings.calendar_enabled,
+            "calendar_changes_confirmed_in": settings.calendar_confirm,
             "organizing_enabled": settings.allow_organize,
             "trusted_recipients": list(settings.trusted_recipients),
             "blocked_reason": tools.guard.blocked_reason,
@@ -713,6 +894,7 @@ def build_server(
         limit: Annotated[int, Field(ge=1, le=200)] = 50,
     ) -> dict[str, Any]:
         """Meetings and appointments in the user's calendar, earliest first, repeating meetings expanded into occurrences. Each has an `event_id` (for cancel_meeting and reschedule_meeting), start and end in local time, organizer, `i_am_organizer`, attendees and `repeats`."""
+        tools.require_calendar(change=False)
         begin = _date(start)
         if begin is None:
             raise ToolError("Give `start`, for example today.")
@@ -722,16 +904,36 @@ def build_server(
                 "events": [e.to_dict() for e in events], "limit_reached": len(events) >= limit}
 
     @mcp.tool(
+        title="Create a meeting",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True),
+    )
+    async def create_meeting(
+        subject: str,
+        start: Annotated[str, Field(description="ISO 8601 date-time in the user's local time, for example 2026-10-23T15:00.")],
+        end: Annotated[str | None, Field(description="End; by default start + duration_minutes.")] = None,
+        duration_minutes: Annotated[int, Field(ge=5, le=24 * 60)] = 30,
+        attendees: Annotated[list[str] | None, Field(description="Addresses to invite (from find_people). Empty: an appointment only in the user's calendar.")] = None,
+        location: str = "",
+        agenda: Annotated[str, Field(description="Text of the invitation, plain text.")] = "",
+        answer: Annotated[ElicitationResult[Confirmation], Resolve(_ask_create)] = None,  # type: ignore[assignment]
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        """Creates a meeting in the user's calendar and sends invitations to the attendees (or an appointment without them). Must be allowed in OWA Mail MCP setup, and happens only after the user approves it — in the confirmation window, or in this chat when the user chose that in setup and the client can ask them. Online-meeting links (Teams) are not created. Check free time with list_events first. Returns `done: true` and the new `event_id`."""
+        return await tools.apply_create(ctx, answer, subject=subject, start=start, end=end, duration_minutes=duration_minutes,
+                                        attendees=list(attendees or []), location=location, agenda=agenda)
+
+    @mcp.tool(
         title="Cancel or decline a meeting",
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=True),
     )
     async def cancel_meeting(
         event_id: Annotated[str, Field(description="From list_events.")],
         message: Annotated[str, Field(description="Optional short note to the attendees (or to the organizer when declining), plain text.")] = "",
+        answer: Annotated[ElicitationResult[Confirmation], Resolve(_ask_cancel)] = None,  # type: ignore[assignment]
         ctx: Context = None,  # type: ignore[assignment]
     ) -> dict[str, Any]:
-        """Cancels a meeting the user organizes (attendees get a cancellation), declines a meeting the user was invited to (the organizer gets the answer), or deletes a plain appointment without attendees. For a repeating meeting, only this occurrence. Must be allowed in OWA Mail MCP setup, and happens only after the user approves it in the confirmation window (about 50 seconds). Returns `done: true` and `outcome`: cancelled, declined or deleted. A decline in the window or a timeout is an error saying nothing changed: do not retry unless asked."""
-        return await tools.change_event(ctx, event_id, note=message)
+        """Cancels a meeting the user organizes (attendees get a cancellation), declines a meeting the user was invited to (the organizer gets the answer), or deletes a plain appointment without attendees. For a repeating meeting, only this occurrence. Must be allowed in OWA Mail MCP setup, and happens only after the user approves it (in the confirmation window or, if they chose so, in this chat). Returns `done: true` and `outcome`: cancelled, declined or deleted. A refusal or a timeout is an error saying nothing changed: do not retry unless asked."""
+        return await tools.apply_change(ctx, event_id, answer, note=message)
 
     @mcp.tool(
         title="Move a meeting",
@@ -741,23 +943,11 @@ def build_server(
         event_id: Annotated[str, Field(description="From list_events.")],
         new_start: Annotated[str, Field(description="New start, ISO 8601 date-time in the user's local time, for example 2026-10-23T15:00.")],
         new_end: Annotated[str | None, Field(description="New end; by default the meeting keeps its length.")] = None,
+        answer: Annotated[ElicitationResult[Confirmation], Resolve(_ask_reschedule)] = None,  # type: ignore[assignment]
         ctx: Context = None,  # type: ignore[assignment]
     ) -> dict[str, Any]:
-        """Moves a meeting the user organizes, or an appointment without attendees, to a new time; attendees get the updated invitation. For a repeating meeting, only this occurrence. Someone else's meeting cannot be moved: offer to write to its organizer. Must be allowed in OWA Mail MCP setup, and happens only after the user approves it in the confirmation window. Returns `done: true` with the new start and end."""
-        if not re.search(r"\d[T ]\d{1,2}:\d{2}", new_start or ""):
-            raise ToolError("Give `new_start` with a time, for example 2026-10-23T15:00.")
-        start = _date(new_start)
-        event = await tools.run(tools.backend.get_event, event_id)
-        if new_end:
-            end = _date(new_end)
-        else:
-            length = (event.end - event.start) if (event.start and event.end) else timedelta(minutes=30)
-            end = start + length
-        if end <= start:
-            raise ToolError("`new_end` must be after `new_start`.")
-        if start < now() - timedelta(minutes=5):
-            raise ToolError("`new_start` is in the past.")
-        return await tools.change_event(ctx, event_id, reschedule=(start, end))
+        """Moves a meeting the user organizes, or an appointment without attendees, to a new time; attendees get the updated invitation. For a repeating meeting, only this occurrence. Someone else's meeting cannot be moved: offer to write to its organizer. Must be allowed in OWA Mail MCP setup, and happens only after the user approves it (in the confirmation window or, if they chose so, in this chat). Returns `done: true` with the new start and end."""
+        return await tools.apply_change(ctx, event_id, answer, new_start=new_start, new_end=new_end)
 
     @mcp.prompt(title="Summarize a conversation")
     def summarize_thread(message_id: str) -> str:

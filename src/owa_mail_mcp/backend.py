@@ -115,6 +115,10 @@ class MailBackend(Protocol):
         tells the organizer (`declined`). A plain appointment is deleted (`deleted`)."""
         ...
 
+    def create_event(self, subject: str, start: datetime, end: datetime, attendees: list[str], location: str, body: str) -> Event:
+        """Creates a meeting (invitations go to the attendees) or, without attendees, an appointment."""
+        ...
+
     def reschedule_event(self, event_id: str, start: datetime, end: datetime) -> None:
         """Moves the event; for a meeting the attendees get the updated invitation. Organizer only."""
         ...

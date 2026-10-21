@@ -117,7 +117,7 @@ OpenCode and Kilo Code ignore `mcpServers`: use their `mcp` format.
    > 1. Type your password there. I will not see it; it is saved in your system keychain.
    > 2. Click **Test connection**. You should see your name and your latest emails. Then click **Save**.
    > 3. If the window asks whether to trust the server's certificate or to allow outdated encryption settings, decide yourself; ask your IT department if unsure.
-   > 4. Sending and meeting changes are off: I can only read. If you want me to send emails or cancel and move meetings, turn on **Allow sending** and/or **Allow changing meetings**; for drafts, flags, folders and cleanup, **Allow organizing mail**. Do not fill in the list of recipients without confirmation for the user: that is their decision. Every email and every change will still wait for your click in a confirmation window.
+   > 4. Sending and meeting changes are off: I can only read. If you want me to send emails or cancel and move meetings, turn on **Allow sending** and/or, in the Calendar block, **Allow creating, moving and cancelling meetings** (and choose whether to confirm meeting changes in the window or in the chat); for drafts, flags, folders and cleanup, **Allow organizing mail**. Do not fill in the list of recipients without confirmation for the user: that is their decision. Every email and every change will still wait for your click in a confirmation window.
    > 5. Click **Done** at the bottom.
 
 4. **Wait for the result** without asking the user repeatedly. Check every 10 seconds, for up to 10 minutes:

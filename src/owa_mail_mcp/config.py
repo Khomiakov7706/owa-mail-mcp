@@ -46,8 +46,13 @@ class Settings:
     auth_type: str = "ntlm"
     allow_send: bool = False
     """`send_email` refuses to work unless this is on."""
+    calendar_enabled: bool = True
+    """The calendar tools at all: off hides the user's meetings from the assistant."""
     allow_calendar: bool = False
-    """`cancel_meeting` and `reschedule_meeting` refuse to work unless this is on."""
+    """create_meeting, cancel_meeting and reschedule_meeting refuse to work unless this is on."""
+    calendar_confirm: str = "window"
+    """How the user approves meeting changes: `window` (the local confirmation window) or `chat` (the MCP client asks
+    them, via MCP elicitation; the window is used when the client cannot)."""
     allow_organize: bool = False
     """Drafts, read/unread, flags, categories, moving to folders and to Deleted Items: reversible, no confirmation window."""
     trusted_recipients: tuple[str, ...] = ()
@@ -115,12 +120,12 @@ def _env_overrides() -> dict[str, Any]:
     text = {
         "OWA_MAIL_BACKEND": "backend", "OWA_MAIL_SERVER": "server", "OWA_MAIL_EMAIL": "email",
         "OWA_MAIL_USERNAME": "username", "OWA_MAIL_PASSWORD": "password", "OWA_MAIL_AUTH": "auth_type",
-        "OWA_MAIL_UI_HOST": "ui_host", "OWA_MAIL_PROXY": "proxy", "OWA_MAIL_LANG": "language",
+        "OWA_MAIL_UI_HOST": "ui_host", "OWA_MAIL_PROXY": "proxy", "OWA_MAIL_LANG": "language", "OWA_MAIL_CALENDAR_CONFIRM": "calendar_confirm",
     }
     for var, name in text.items():
         if env.get(var):
             out[name] = env[var].strip() if name != "password" else env[var]
-    for var, name in {"OWA_MAIL_ALLOW_SEND": "allow_send", "OWA_MAIL_ALLOW_CALENDAR": "allow_calendar", "OWA_MAIL_ALLOW_ORGANIZE": "allow_organize", "OWA_MAIL_OPEN_BROWSER": "open_browser"}.items():
+    for var, name in {"OWA_MAIL_ALLOW_SEND": "allow_send", "OWA_MAIL_ALLOW_CALENDAR": "allow_calendar", "OWA_MAIL_ALLOW_ORGANIZE": "allow_organize", "OWA_MAIL_CALENDAR": "calendar_enabled", "OWA_MAIL_OPEN_BROWSER": "open_browser"}.items():
         raw = env.get(var, "").strip().lower()
         if raw:
             out[name] = raw in {"1", "true", "yes", "on"}

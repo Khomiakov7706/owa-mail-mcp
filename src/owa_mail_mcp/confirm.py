@@ -50,6 +50,8 @@ class Proposal:
     """A calendar change: `kind` (cancel, decline, delete, reschedule), the `event`, and `new_start`/`new_end` or `note`."""
     auto: bool = False
     """Sent without asking: every recipient is on the user's trusted list."""
+    via: str = "window"
+    """Where the user said yes: `window`, `trusted` (no question asked) or `chat` (the MCP client asked them)."""
 
     def to_dict(self, now: float) -> dict[str, Any]:
         return {
@@ -60,6 +62,7 @@ class Proposal:
             "message": self.message.to_dict() if self.message else None,
             "action": self.action,
             "auto": self.auto,
+            "via": self.via,
             "external": self.review.external,
             "warnings": self.review.warnings,
             "warning_codes": [getattr(w, "code", "") for w in self.review.warnings],
@@ -111,13 +114,15 @@ class ConfirmationBroker:
             self._cond.notify_all()
             return proposal
 
-    def record_trusted(self, message: Outgoing, review: OutgoingReview, *, client: str, sender: str, reply_context=None) -> Proposal:
-        """An email that skips the question (trusted recipients): approved at once, but listed in the window's history."""
+    def record_trusted(self, message: Outgoing | None, review: OutgoingReview, *, client: str, sender: str, reply_context=None,
+                       action: dict[str, Any] | None = None, via: str = "trusted") -> Proposal:
+        """Approved elsewhere (trusted recipients, or the user answered in the chat): listed in the window's history."""
         with self._cond:
             now = self._clock()
             proposal = Proposal(
                 id=secrets.token_urlsafe(9), message=message, review=review, client=client, sender=sender, created=now,
-                deadline=now, reply_context=reply_context, status=Status.APPROVED, finished=now, auto=True,
+                deadline=now, reply_context=reply_context, status=Status.APPROVED, finished=now, auto=via == "trusted",
+                action=action, via=via,
             )
             self._items[proposal.id] = proposal
             self._order.append(proposal.id)
