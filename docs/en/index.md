@@ -159,9 +159,8 @@ Email content is written by other people: it's data, not instructions.
 
 ### Before you connect work email
 
-- Get your security team's sign-off on sending email content to an AI service.
-- Don't turn on sending unless you really need it.
-- Get an independent code review and install a pinned version, not the latest from main.
+- Make sure you trust your network.
+- Make sure you trust the provider of the model your agent uses: the emails the agent reads are sent to it.
 
 ## Commands
 
