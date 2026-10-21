@@ -233,6 +233,7 @@ h3{font-size:18px;letter-spacing:-.02em;font-weight:650}
 /* Security */
 .sec{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}
 .sec-h{margin-top:48px;font-size:20px}
+h2+.sec-h{margin-top:32px}
 .risks{list-style:none;display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:20px;counter-reset:rk}
 .risks li{position:relative;counter-increment:rk;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:14px;padding:18px 20px 18px 56px;color:var(--muted);font-size:15px;min-width:0}
 .risks li::before{content:counter(rk);position:absolute;left:18px;top:18px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font:600 12px var(--mono);color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
