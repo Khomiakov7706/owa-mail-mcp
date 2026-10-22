@@ -82,11 +82,13 @@ class ConfirmationBroker:
         self,
         review: Callable[[Outgoing], OutgoingReview],
         *,
+        review_action: Callable[[dict[str, Any], dict[str, Any]], tuple[dict[str, Any], list[str]]] | None = None,
         max_pending: int = 3,
         history: int = 20,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._review = review
+        self._review_action = review_action
         self._max_pending = max_pending
         self._history = history
         self._clock = clock
@@ -160,7 +162,8 @@ class ConfirmationBroker:
 
     # --- window side -------------------------------------------------------------------------
 
-    def decide(self, proposal_id: str, approve: bool, edited: Outgoing | None = None) -> str | None:
+    def decide(self, proposal_id: str, approve: bool, edited: Outgoing | None = None,
+               action_edits: dict[str, Any] | None = None) -> str | None:
         """The user's button. Returns an error to show in the window, or None."""
         with self._cond:
             self._expire_due()
@@ -177,6 +180,14 @@ class ConfirmationBroker:
                 if edited.fingerprint() != proposal.message.fingerprint():
                     proposal.edited = True
                 proposal.message, proposal.review = edited, review
+            if approve and action_edits and proposal.action is not None and self._review_action is not None:
+                try:
+                    action, external = self._review_action(proposal.action, action_edits)
+                except ValueError as exc:
+                    return Coded(str(exc), getattr(exc, "code", ""), **getattr(exc, "params", {}))
+                if action != proposal.action:
+                    proposal.edited = True
+                proposal.action, proposal.review = action, OutgoingReview(external=external)
             proposal.status = Status.APPROVED if approve else Status.REJECTED
             proposal.finished = self._clock()
             self._cond.notify_all()

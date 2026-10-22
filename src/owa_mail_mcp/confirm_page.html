@@ -31,8 +31,8 @@ header .sub { color: var(--muted); font-size: 13px; }
 .who { font-weight: 600; }
 .timer { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .timer.low { color: var(--danger); font-weight: 600; }
-.row { display: grid; grid-template-columns: 72px 1fr; gap: 8px; padding: 4px 0; align-items: start; }
-.row .k { color: var(--muted); font-size: 13px; padding-top: 3px; }
+.row { display: grid; grid-template-columns: 112px 1fr; gap: 8px; padding: 4px 0; align-items: start; }
+.row .k { color: var(--muted); font-size: 13px; padding-top: 3px; overflow-wrap: anywhere; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { background: var(--chip); border-radius: 999px; padding: 2px 10px; font-size: 13px; word-break: break-all; }
 .chip.ext { background: var(--danger-bg); color: var(--danger); font-weight: 600; }
@@ -48,6 +48,7 @@ button:disabled { opacity: .5; cursor: default; }
 label { display: block; font-size: 13px; color: var(--muted); margin-top: 10px; }
 input, textarea { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 4px; }
 textarea { min-height: 220px; resize: vertical; }
+textarea.short { min-height: 110px; }
 .err { color: var(--danger); margin-top: 10px; font-size: 13px; }
 .done { display: flex; justify-content: space-between; gap: 12px; padding: 10px 14px; }
 .done .s { white-space: nowrap; font-size: 13px; }
@@ -112,17 +113,66 @@ async function decide(id, action, edits) {
   refresh(true);
 }
 
+// The approving button wakes up 3 seconds after a card first appears: time to read who gets what,
+// and a stray click (or a click-jacking overlay) cannot fire it. "Don't send" works at once.
+const ARM_MS = 3000;
+const firstSeen = new Map();
+function approveButton(id, label, act) {
+  if (!firstSeen.has(id)) firstSeen.set(id, Date.now());
+  const b = el("button", { class: "primary", "data-ready-at": String(firstSeen.get(id) + ARM_MS), "data-label": label,
+    onclick: () => { if (Number(b.dataset.readyAt) > Date.now()) return; b.dataset.done = "1"; arm(b); act(); } }, label);
+  arm(b);
+  return b;
+}
+function arm(b) {
+  const left = Math.ceil((Number(b.dataset.readyAt) - Date.now()) / 1000);
+  b.disabled = left > 0 || b.dataset.done === "1";
+  b.textContent = left > 0 ? `${b.dataset.label} · ${left}` : b.dataset.label;
+}
+setInterval(() => document.querySelectorAll("button[data-ready-at]").forEach(arm), 200);
+
 const when = (iso) => new Date(iso).toLocaleString(document.documentElement.lang, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const timeOnly = (iso) => new Date(iso).toLocaleTimeString(document.documentElement.lang, { hour: "2-digit", minute: "2-digit" });
 const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
 const span = (start, end) => start ? when(start) + " – " + (end ? (sameDay(start, end) ? timeOnly(end) : when(end)) : "") : "";
 
+// Local "YYYY-MM-DDTHH:MM" for a datetime-local input, from the server's ISO time with its offset.
+const localInput = (iso) => { const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+const emails = (list) => (list || []).map(p => p.email || p.name).filter(Boolean);
+
+function meetingEditor(item, draft) {
+  const a = item.action;
+  const field = (key, label, kind) => {
+    const input = kind === "area" ? el("textarea", { class: "short" }) : el("input", { type: kind || "text" });
+    input.value = draft[key];
+    input.addEventListener("input", () => { draft[key] = input.value; });
+    return [el("label", {}, label), input];
+  };
+  const fields = a.kind === "reschedule"
+    ? [...field("new_start", T("field_start"), "datetime-local"), ...field("new_end", T("field_end"), "datetime-local")]
+    : [...field("subject", T("field_subject")), ...field("start", T("field_start"), "datetime-local"), ...field("end", T("field_end"), "datetime-local"),
+       ...field("location", T("location")), ...field("attendees", T("attendees")), ...field("optional_attendees", T("optional_attendees")),
+       ...field("note", T("field_agenda"), "area")];
+  return a.kind === "reschedule" ? [el("div", { class: "subject" }, a.event.subject), ...fields] : fields;
+}
+
 function actionCard(item) {
   const a = item.action, ev = a.event;
   const timer = el("span", { class: "timer" + (item.seconds_left <= 10 ? " low" : ""), "data-id": item.id }, T("seconds", { n: item.seconds_left }));
-  const people = (ev.attendees || []).map(p => p.email || p.name).filter(Boolean);
+  const people = emails(ev.attendees), optional = emails(ev.optional_attendees);
+  const head = el("div", { class: "top" }, el("div", { class: "who" }, T("asks_" + a.kind, { client: item.client || T("mcp_client") })), timer);
+  const draft = editing.get(item.id);
+  if (draft) {
+    const card = el("div", { class: "card pending" }, head, ...meetingEditor(item, draft));
+    card.append(el("div", { class: "actions" },
+      approveButton(item.id, T("do_" + a.kind), () => decide(item.id, "approve", draft)),
+      el("button", { onclick: () => { editing.delete(item.id); render(window.__items || [], true); } }, T("cancel_edits")),
+      el("button", { onclick: () => decide(item.id, "reject") }, T("dont_change"))));
+    if (errors.has(item.id)) card.append(el("div", { class: "err" }, errors.get(item.id)));
+    return card;
+  }
   const card = el("div", { class: "card pending" },
-    el("div", { class: "top" }, el("div", { class: "who" }, T("asks_" + a.kind, { client: item.client || T("mcp_client") })), timer),
+    head,
     el("div", {},
       el("div", { class: "row" }, el("div", { class: "k" }, T("meeting")), el("div", { class: "subject" }, ev.subject)),
       el("div", { class: "row" }, el("div", { class: "k" }, T("when")),
@@ -131,16 +181,25 @@ function actionCard(item) {
       ev.location ? el("div", { class: "row" }, el("div", { class: "k" }, T("location")), el("div", {}, ev.location)) : null,
       ev.organizer && !ev.i_am_organizer ? el("div", { class: "row" }, el("div", { class: "k" }, T("organizer")), el("div", {}, ev.organizer.name || ev.organizer.email)) : null,
       people.length ? el("div", { class: "row" }, el("div", { class: "k" }, T("attendees")), chips(people, item.external)) : null,
+      optional.length ? el("div", { class: "row" }, el("div", { class: "k" }, T("optional_attendees")), chips(optional, item.external)) : null,
       a.note ? el("pre", { class: "body" }, a.note) : null));
   const notes = [
     ...(a.kind === "cancel" ? [T("notify_cancel")] : a.kind === "decline" ? [T("notify_decline")]
-        : a.kind === "reschedule" && people.length ? [T("notify_reschedule")] : a.kind === "create" && people.length ? [T("notify_create")] : []),
+        : a.kind === "reschedule" && people.length ? [T("notify_reschedule")] : a.kind === "create" && people.length + optional.length ? [T("notify_create")] : []),
     ...(item.external.length ? [T("external_count", { n: item.external.length })] : []),
     ...(ev.repeats ? [T("only_occurrence")] : []),
   ];
   if (notes.length) card.append(el("div", { class: "warn" }, el("ul", {}, notes.map(w => el("li", {}, w)))));
+  const startEdit = () => {
+    editing.set(item.id, a.kind === "reschedule"
+      ? { new_start: localInput(a.new_start), new_end: localInput(a.new_end) }
+      : { subject: ev.subject, start: localInput(ev.start), end: localInput(ev.end), location: ev.location || "",
+          attendees: people.join(", "), optional_attendees: optional.join(", "), note: a.note || "" });
+    render(window.__items || [], true);
+  };
   card.append(el("div", { class: "actions" },
-    el("button", { class: "primary", onclick: (e) => { e.target.disabled = true; decide(item.id, "approve"); } }, T("do_" + a.kind)),
+    approveButton(item.id, T("do_" + a.kind), () => decide(item.id, "approve")),
+    a.kind === "create" || a.kind === "reschedule" ? el("button", { onclick: startEdit }, T("edit")) : null,
     el("button", { onclick: () => decide(item.id, "reject") }, T("dont_change"))));
   if (errors.has(item.id)) card.append(el("div", { class: "err" }, errors.get(item.id)));
   return card;
@@ -168,8 +227,8 @@ function pendingCard(item) {
     card.append(...field("to", T("field_to")), ...field("cc", T("field_cc")), ...field("bcc", T("field_bcc")),
                 ...field("subject", T("field_subject")), ...field("body", T("field_body"), true));
     card.append(el("div", { class: "actions" },
-      el("button", { class: "primary", onclick: () => decide(item.id, "approve", draft) }, T("send_edited")),
-      el("button", { onclick: () => { editing.delete(item.id); render(window.__items || []); } }, T("cancel_edits")),
+      approveButton(item.id, T("send_edited"), () => decide(item.id, "approve", draft)),
+      el("button", { onclick: () => { editing.delete(item.id); render(window.__items || [], true); } }, T("cancel_edits")),
       el("button", { onclick: () => decide(item.id, "reject") }, T("dont_send"))));
   } else {
     card.append(el("div", {},
@@ -185,8 +244,8 @@ function pendingCard(item) {
                       ...item.warnings.map((w, i) => said(w, (item.warning_codes || [])[i]))];
     if (warnings.length) card.append(el("div", { class: "warn" }, el("ul", {}, warnings.map(w => el("li", {}, w)))));
     card.append(el("div", { class: "actions" },
-      el("button", { class: "primary", onclick: (e) => { e.target.disabled = true; decide(item.id, "approve"); } }, T("send")),
-      el("button", { onclick: () => { editing.set(item.id, { to: m.to.join(", "), cc: m.cc.join(", "), bcc: m.bcc.join(", "), subject: m.subject, body: m.body }); render(window.__items || []); } }, T("edit")),
+      approveButton(item.id, T("send"), () => decide(item.id, "approve")),
+      el("button", { onclick: () => { editing.set(item.id, { to: m.to.join(", "), cc: m.cc.join(", "), bcc: m.bcc.join(", "), subject: m.subject, body: m.body }); render(window.__items || [], true); } }, T("edit")),
       el("button", { onclick: () => decide(item.id, "reject") }, T("dont_send"))));
   }
   if (errors.has(item.id)) card.append(el("div", { class: "err" }, errors.get(item.id)));
@@ -199,7 +258,7 @@ function historyRow(item) {
     const status = item.status === "sent" ? T("done_" + a.kind) + (item.via === "chat" ? " · " + T("status_sent_chat") : "")
       : I18N["confirm.action_" + item.status] || I18N["confirm.status_" + item.status] || item.status;
     return el("div", { class: "card done" },
-      el("div", { class: "ell" }, el("span", { class: "subject" }, a.event.subject), " · ", span(a.new_start || a.event.start, a.new_end || a.event.end)),
+      el("div", { class: "ell" }, el("span", { class: "subject" }, a.event.subject), " · ", span(a.new_start || a.event.start, a.new_end || a.event.end), item.edited ? T("edited_suffix") : ""),
       el("div", { class: "s " + item.status }, status, item.error ? `: ${item.error}` : ""));
   }
   const m = item.message;
@@ -208,13 +267,13 @@ function historyRow(item) {
     el("div", { class: "s " + item.status }, (item.auto && item.status === "sent" ? T("status_sent_auto") : I18N["confirm.status_" + item.status] || item.status), item.error ? `: ${item.error}` : ""));
 }
 
-function render(items) {
+function render(items, force) {
   window.__items = items;
   const pending = items.filter(i => i.status === "pending");
   const ids = pending.map(i => i.id).join(",");
   const pendingBox = document.getElementById("pending");
-  // While the user edits, only the timers move: re-rendering would steal the cursor.
-  if (ids === lastPendingIds && editing.size) {
+  // While the user edits, only the timers move: re-rendering would steal the cursor. `force`: the user opened or left an editor.
+  if (!force && ids === lastPendingIds && editing.size) {
     for (const i of pending) {
       const t = pendingBox.querySelector(`.timer[data-id="${i.id}"]`);
       if (t) { t.textContent = T("seconds", { n: i.seconds_left }); t.className = "timer" + (i.seconds_left <= 10 ? " low" : ""); }
@@ -230,13 +289,13 @@ function render(items) {
   document.title = pending.length ? T("title_pending", { n: pending.length }) : T("title");
 }
 
-async function refresh() {
+async function refresh(force) {
   try {
     const res = await fetch(base + "api/pending", { cache: "no-store" });
     if (!res.ok) throw new Error(res.status);
     const data = await res.json();
     document.getElementById("dot").classList.remove("off");
-    render(data.items);
+    render(data.items, force);
   } catch (e) {
     document.getElementById("dot").classList.add("off");
   }

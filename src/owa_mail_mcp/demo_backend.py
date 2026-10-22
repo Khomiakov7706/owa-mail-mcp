@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 from .backend import AttachmentData, BackendError, FolderScope, SearchQuery, SearchResult, pick_attachment
 from .models import Event, Message, MessageSummary, Outgoing, Person
-from .text import preview
+from .text import find_join_url, preview
 from .when import now
 
 ME = Person(email="ivan.petrov@example.com", name="Иван Петров", job_title="Руководитель проекта")
@@ -77,6 +77,17 @@ class DemoBackend:
             Event(id="ev-4", subject="Фокус-время", start=at(1, 14), end=at(1, 16), organizer=ME, is_organizer=True),
         ]
         self.calendar_log: list[tuple[str, str]] = []
+        self.details: dict[str, dict] = {
+            "ev-1": {"agenda": "Статус задач, отпуск в ноябре.", "optional": []},
+            "ev-2": {"agenda": "Сокращение подрядчиков на 10% и сдвиг релиза 3.2.\n\nПодключиться: https://teams.microsoft.com/l/meetup-join/demo-budget",
+                     "optional": ["maria.ivanova@example.com"]},
+        }
+        # Other people's busy time, by hours from the start of tomorrow.
+        self.busy = {
+            "anna.smirnova@example.com": [(at(1, 10), at(1, 12)), (at(2, 15), at(2, 16)), (at(3, 10), at(3, 10, 30))],
+            "oleg.kuznetsov@example.com": [(at(1, 11), at(1, 11, 30)), (at(1, 13), at(1, 14)), (at(2, 15), at(2, 16))],
+            "maria.ivanova@example.com": [(at(1, 9), at(1, 18))],
+        }
         self.files = {
             "postmortem.txt": ("text/plain", "Постмортем\n02:10 — отказ платёжного шлюза.\n02:50 — восстановлено.\nПричина: истёк сертификат.".encode()),
             "budget_q4.xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", b"PK..."),
@@ -249,14 +260,36 @@ class DemoBackend:
             self.calendar_log.append((outcome, event_id))
         return outcome
 
-    def create_event(self, subject: str, start: datetime, end: datetime, attendees: list[str], location: str, body: str) -> Event:
-        people = [_by_email.get(x, Person(email=x)) for x in attendees]
+    def create_event(self, subject: str, start: datetime, end: datetime, attendees: list[str], location: str, body: str,
+                     optional: list[str] | None = None) -> Event:
+        people = [_by_email.get(x, Person(email=x)) for x in [*attendees, *(optional or [])]]
         event = Event(id=f"ev-{next(self._ids)}", subject=subject, start=start, end=end, location=location, organizer=ME,
                       is_organizer=True, attendees=people, is_meeting=bool(people))
         with self._lock:
             self.events.append(event)
+            self.details[event.id] = {"agenda": body, "optional": list(optional or [])}
             self.calendar_log.append(("created", event.id))
         return replace(event)
+
+    def event_details(self, event_id: str) -> dict:
+        event = self.get_event(event_id)
+        extra = self.details.get(event_id, {})
+        optional = set(extra.get("optional", []))
+        attendees = [{"name": p.name, "email": p.email, "role": "optional" if p.email in optional else "required",
+                      "response": "organizer" if event.organizer and p.email == event.organizer.email else "accepted"}
+                     for p in event.attendees]
+        if event.is_meeting and not event.is_organizer:
+            attendees.append({"name": ME.name, "email": ME.email, "role": "required", "response": "accepted", "is_you": True})
+        agenda = extra.get("agenda", "")
+        return {"event": event, "agenda": agenda, "attendees": attendees,
+                "join_url": find_join_url(agenda + "\n" + event.location)}
+
+    def free_busy(self, emails: list[str], start: datetime, end: datetime) -> dict[str, list[tuple[datetime, datetime]] | None]:
+        out: dict[str, list[tuple[datetime, datetime]] | None] = {}
+        for email in emails:
+            known = email.lower() in _by_email
+            out[email] = [(s, e) for s, e in self.busy.get(email.lower(), []) if s < end and e > start] if known else None
+        return out
 
     def reschedule_event(self, event_id: str, start: datetime, end: datetime) -> None:
         event = self.get_event(event_id)

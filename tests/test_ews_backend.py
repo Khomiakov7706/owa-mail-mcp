@@ -395,8 +395,6 @@ def test_setup_window_test_connection_against_exchange(exchange, tmp_path, monke
 
     port, fingerprint = exchange
     monkeypatch.setenv("OWA_MAIL_CONFIG_DIR", str(tmp_path))
-    monkeypatch.setattr(config, "get_password", lambda login: None)
-    monkeypatch.setattr(setup_mod, "get_password", lambda login: None)
     config.save_settings(Settings(server="x", email="ivan@corp.test", trusted_certificates={f"localhost:{port}": fingerprint}))
     app = SetupApp(prober=lambda h, p, legacy_ok=False: CertificateInfo(h, p, fingerprint, False))
     status, result = app.test_connection({

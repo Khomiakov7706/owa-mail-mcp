@@ -1,9 +1,42 @@
+import keyring
 import pytest
+from keyring.backend import KeyringBackend
 
 from owa_mail_mcp.config import Settings
 from owa_mail_mcp.demo_backend import DemoBackend
 from owa_mail_mcp.server import build_server
 from owa_mail_mcp.ui import ConfirmationUI
+
+
+class MemoryKeyring(KeyringBackend):
+    """Tests never touch the real keychain."""
+
+    priority = 1
+
+    def __init__(self):
+        super().__init__()
+        self.data = {}
+
+    def get_password(self, service, username):
+        return self.data.get((service, username))
+
+    def set_password(self, service, username, password):
+        self.data[(service, username)] = password
+
+    def delete_password(self, service, username):
+        self.data.pop((service, username), None)
+
+
+@pytest.fixture(autouse=True)
+def memory_keyring(monkeypatch):
+    from owa_mail_mcp import config
+
+    previous = keyring.get_keyring()
+    store = MemoryKeyring()
+    keyring.set_keyring(store)
+    monkeypatch.setattr(config, "_key_cache", {})
+    yield store
+    keyring.set_keyring(previous)
 
 
 @pytest.fixture(autouse=True)

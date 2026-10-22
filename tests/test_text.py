@@ -88,3 +88,30 @@ def test_policy_warns_on_hidden_chars_and_collapses_blank_lines():
     review = check_outgoing(m, my_email="me@corp.ru")
     assert m.body == "a​ b\n\nc"
     assert any("invisible" in w for w in review.warnings)
+
+
+@pytest.mark.parametrize("text,hidden", [
+    ("Встреча по бюджету", False),
+    ("Ре​лиз", True),               # zero-width space
+    ("Room‮4", True),               # right-to-left override
+    ("a­b", True),                  # soft hyphen
+    ("line\x07bell", True),              # control character
+    ("Tab\tand\nnew line", False),
+    ("👨‍👩‍👧 family", False),  # ZWJ inside an emoji sequence
+    ("❤️", False),                  # emoji presentation selector
+    ("नमस्‍ते", False),               # ZWJ in a script that needs it
+    ("Latin‍text", True),           # ZWJ where nothing needs it
+    ("\U0001f3f4\U000e0067\U000e0062\U000e0065\U000e006e\U000e0067\U000e007f", False),  # flag of England
+    ("tag\U000e0041", True),             # tag characters hiding ASCII
+    ("braille⠀blank", True),
+])
+def test_invisible_text_in_meetings(text, hidden):
+    from owa_mail_mcp.text import has_invisible_text
+
+    assert has_invisible_text(text) is hidden
+
+
+def test_look_alike_spaces_become_plain():
+    from owa_mail_mcp.text import normalize_spaces
+
+    assert normalize_spaces("10 000 руб.　ok") == "10 000 руб. ok"

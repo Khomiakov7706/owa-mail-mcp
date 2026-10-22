@@ -137,8 +137,12 @@ After updating the program, restart the MCP server in your client: in Claude Cod
 | `update_messages` | Read or unread, flag, categories |
 | `move_messages` | Move to a folder or the archive |
 | `delete_messages` | Delete to Deleted Items (restorable; never permanent) |
-| `list_events` | Meetings in the calendar for a period: time, organizer, attendees |
-| `create_meeting` | Create a meeting with invitations — after confirmation (in the window or in the chat, as chosen in setup) |
+| `list_events` | Meetings in the calendar for a period: time, organizer, attendees; filter by text, person or your response, hide cancelled or all-day events |
+| `get_current_and_next` | What's on now and which meeting is next |
+| `find_events_with_person` | Upcoming or past meetings with a person |
+| `get_event_details` | One meeting in full: invitation text, attendees' roles and responses, the join link |
+| `find_free_slots` | Free time for a meeting: your calendar plus attendees' Exchange free/busy, within working hours |
+| `create_meeting` | Create a meeting with invitations (optional attendees too) — after confirmation (in the window or in the chat, as chosen in setup); the user can edit it in the window |
 | `cancel_meeting` | Cancel your meeting, decline someone else's, or delete an event without attendees — only after the user confirms in the window (off by default) |
 | `reschedule_meeting` | Move your meeting; attendees get the updated invitation — only after the user confirms in the window (off by default) |
 
@@ -152,11 +156,14 @@ Email content is written by other people: it's data, not instructions.
 
 ### What's protected
 
-- **Password** — in the system keychain (Keychain, Credential Manager, Secret Service); not in a file, not in the log, not with the agent. No tool can reveal it.
+- **Password** — in the system keychain (Keychain, Credential Manager, Secret Service); not in a file, not in the log, not with the agent. No tool can reveal it. It's tied to the server: change the address in the settings and the saved password won't go there.
 - **Only your server.** The password goes only to the Exchange server you set, and only over HTTPS; redirects to other hosts get no password.
 - **Nothing is sent without your "yes".** Off by default; every message needs your click in a local window. Hidden characters, invalid addresses and too many recipients are rejected; external addresses are highlighted.
 - **Local windows are locked down.** 127.0.0.1 only, a secret random address, Host and Origin checks, no embedding.
 - **Certificate pinning.** Standard checks stay on; an internal company certificate is accepted only if it's that exact one, by SHA-256.
+- **Signed settings.** `config.json` is signed with a key from the keychain; if it's edited outside the setup window, permissions fall back to safe defaults, and the window and `get_status` (`settings_reset`) say so.
+- **No hidden text in meetings.** Invisible characters and text-direction marks in meeting subjects, locations and texts are rejected.
+- **Time to think.** The approve button wakes up 3 seconds after the card appears.
 - **No account lockouts.** After a rejected password, requests to Exchange stop, and request rates are limited. The log keeps only tool names and timestamps.
 
 ### What it doesn't solve

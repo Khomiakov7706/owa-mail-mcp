@@ -1,18 +1,29 @@
 """Settings: the config file the setup window writes, overridden by environment variables.
 
 The password never goes into the file: it lives in the OS keyring (Keychain, Credential Manager,
-Secret Service), or comes from OWA_MAIL_PASSWORD.
+Secret Service), bound to the server it was entered for, or comes from OWA_MAIL_PASSWORD.
+
+The file is signed with a key kept in the keyring. A file changed behind the setup window's back
+(by hand, by a script, by an agent with a shell) loses its permissions and trusted lists: they go back
+to the safe defaults until the user sets them again in the window.
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
+import logging
 import os
+import secrets
 import sys
 import tempfile
 from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
+
+log = logging.getLogger(__name__)
 
 KEYRING_SERVICE = "owa-mail-mcp"
 CONNECTION_FIELDS = ("backend", "server", "email", "username", "password", "auth_type", "trusted_certificates", "legacy_tls", "proxy")
@@ -76,6 +87,8 @@ class Settings:
     """HTTPS proxy for Exchange, when the browser uses one the system settings do not show (a PAC script)."""
     language: str | None = None
     """Interface language of the windows and messages (`ru`, `en`, `zh`, `es`); None follows the system."""
+    tampered: bool = False
+    """The file was changed outside the setup window: its permissions were reset to the safe defaults. Not saved."""
 
     @property
     def login(self) -> str | None:
@@ -90,7 +103,8 @@ class Settings:
 
     @classmethod
     def load(cls, *, with_password: bool = True) -> "Settings":
-        """The config file, then environment variables on top, then the password from the keyring."""
+        """The config file (checked against its signature), then environment variables on top, then the password
+        the keyring holds for this login on this server."""
         values: dict[str, Any] = {}
         path = config_path()
         if path.exists():
@@ -98,15 +112,21 @@ class Settings:
                 raw = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 raw = {}
-            known = {f.name for f in fields(cls)} - {"password"}
+            if not isinstance(raw, dict):
+                raw = {}
+            known = {f.name for f in fields(cls)} - {"password", "tampered"}
             values = {k: v for k, v in raw.items() if k in known}
+            if not _signature_ok(raw):
+                log.warning("config.json was changed outside the setup window: permissions reset to the safe defaults")
+                values = {**{k: v for k, v in values.items() if k not in _GUARDED}, "tampered": True}
             for name in ("internal_domains", "legacy_tls", "trusted_recipients"):
                 if name in values:
                     values[name] = tuple(values[name] or ())
+            _migrate_legacy_password(values.get("username") or values.get("email"), values.get("server"))
         values.update(_env_overrides())
         settings = cls(**values)
         if with_password and not settings.password and settings.backend == "ews":
-            settings = replace(settings, password=get_password(settings.login))
+            settings = replace(settings, password=get_password(settings.login, settings.server))
         return settings
 
     @classmethod
@@ -148,11 +168,14 @@ def save_settings(settings: Settings) -> Path:
     """Writes everything except the password, readable by the user only."""
     data = asdict(settings)
     data.pop("password", None)
-    for transient in ("ui_host", "ui_port", "open_browser"):
+    for transient in ("ui_host", "ui_port", "open_browser", "tampered"):
         data.pop(transient, None)
     data["internal_domains"] = list(settings.internal_domains)
     data["legacy_tls"] = list(settings.legacy_tls)
     data["trusted_recipients"] = list(settings.trusted_recipients)
+    key = _signing_key()
+    if key:
+        data["signature"] = _sign(data, key)
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".config-", suffix=".json")
@@ -167,30 +190,130 @@ def save_settings(settings: Settings) -> Path:
     return path
 
 
+# --- signature ----------------------------------------------------------------------------------
+
+_GUARDED = {
+    "allow_send", "allow_calendar", "allow_organize", "calendar_enabled", "calendar_confirm", "trusted_recipients",
+    "trusted_per_hour", "internal_domains", "max_recipients", "requests_per_minute", "confirm_timeout",
+    "trusted_certificates", "legacy_tls", "proxy",
+}
+"""What a file changed behind the window's back must not decide: these fall back to their safe defaults."""
+_KEY_ENTRY = "settings-signing-key"
+_key_cache: dict[str, str] = {}
+
+
+def _signing_key(create: bool = True) -> str | None:
+    """A random key kept in the keyring; None where there is no keyring (the file cannot be protected there)."""
+    if "key" in _key_cache:
+        return _key_cache["key"]
+    try:
+        import keyring
+
+        key = keyring.get_password(KEYRING_SERVICE, _KEY_ENTRY)
+        if not key and create:
+            key = secrets.token_hex(32)
+            keyring.set_password(KEYRING_SERVICE, _KEY_ENTRY, key)
+            _key_cache["new"] = "1"
+    except Exception:
+        return None
+    if key:
+        _key_cache["key"] = key
+    return key
+
+
+def _sign(data: dict[str, Any], key: str) -> str:
+    body = json.dumps({k: v for k, v in data.items() if k != "signature"}, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hmac.new(key.encode(), body.encode(), hashlib.sha256).hexdigest()
+
+
+def _signature_ok(raw: dict[str, Any]) -> bool:
+    had_key = _signing_key(create=False) is not None or "key" in _key_cache
+    key = _signing_key()
+    if key is None:
+        return True  # no keyring: nothing to check against
+    signature = raw.get("signature")
+    if not signature:
+        # The first run with signing (an update from an unsigned version): trust the file once and sign it.
+        if not had_key:
+            try:
+                save_settings(Settings(**{k: (tuple(v) if k in ("internal_domains", "legacy_tls", "trusted_recipients") else v)
+                                          for k, v in raw.items() if k in {f.name for f in fields(Settings)} - {"password", "tampered"}}))
+            except (OSError, TypeError):
+                pass
+            return True
+        return False
+    return hmac.compare_digest(str(signature), _sign(raw, key))
+
+
+def server_host(server: str | None) -> str | None:
+    """`mail.company.com`, `https://mail.company.com/owa` or an EWS URL -> `mail.company.com:443`."""
+    raw = (server or "").strip()
+    if not raw:
+        return None
+    if "://" not in raw:
+        raw = "https://" + raw
+    parsed = urlparse(raw)
+    try:
+        port = parsed.port or 443
+    except ValueError:
+        return None
+    return f"{parsed.hostname.lower()}:{port}" if parsed.hostname else None
+
+
 # --- keyring ------------------------------------------------------------------------------------
 
 class KeyringUnavailable(Exception):
     pass
 
 
-def get_password(login: str | None) -> str | None:
-    if not login:
+def _entry(login: str, server: str | None) -> str | None:
+    host = server_host(server)
+    return f"{login}@@{host}" if host else None
+
+
+def get_password(login: str | None, server: str | None) -> str | None:
+    """The password saved for this login on this server. A changed server address gets nothing: the user types
+    the password again, so a saved one never goes to a host it was not entered for."""
+    entry = _entry(login, server) if login else None
+    if not entry:
         return None
     try:
         import keyring
 
-        return keyring.get_password(KEYRING_SERVICE, login)
+        return keyring.get_password(KEYRING_SERVICE, entry)
     except Exception:
         return None
 
 
-def set_password(login: str, password: str) -> None:
+def set_password(login: str, server: str | None, password: str) -> None:
+    entry = _entry(login, server)
+    if not entry:
+        raise KeyringUnavailable("No server address to save the password for.")
     try:
         import keyring
 
-        keyring.set_password(KEYRING_SERVICE, login, password)
+        keyring.set_password(KEYRING_SERVICE, entry, password)
     except Exception as exc:
         raise KeyringUnavailable(
             f"The system keyring is not available ({type(exc).__name__}). "
             "Set the password in the OWA_MAIL_PASSWORD environment variable of the MCP client instead."
         ) from exc
+
+
+def _migrate_legacy_password(login: str | None, server: str | None) -> None:
+    """Versions before 0.9 kept the password under the login alone. It moves to the server saved in the file then
+    (the one it was entered for), once."""
+    entry = _entry(login, server) if login else None
+    if not entry:
+        return
+    try:
+        import keyring
+
+        legacy = keyring.get_password(KEYRING_SERVICE, login)
+        if legacy is None:
+            return
+        if keyring.get_password(KEYRING_SERVICE, entry) is None:
+            keyring.set_password(KEYRING_SERVICE, entry, legacy)
+        keyring.delete_password(KEYRING_SERVICE, login)
+    except Exception:
+        return

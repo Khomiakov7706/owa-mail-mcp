@@ -159,7 +159,7 @@
 
   <div class="wrap">
     <dl class="stats">
-      <div><dt><b>19</b></dt><dd><span>个智能体工具</span></dd></div>
+      <div><dt><b>23</b></dt><dd><span>个智能体工具</span></dd></div>
       <div><dt><b>0</b></dt><dd><span>封未经你“发送”的邮件</span></dd></div>
       <div><dt><b>1</b></dt><dd><span>条命令完成安装</span></dd></div>
       <div><dt><b>MIT</b></dt><dd><span>开源，免费</span></dd></div>
@@ -397,8 +397,12 @@ owa-mail-mcp setup</pre><button class="copy" type="button" data-copy="#c-win">�
           <tr><td><code>update_messages</code><span class="rw">整理</span></td><td>标记为已读或未读、设置或清除标记、添加或移除类别</td></tr>
           <tr><td><code>move_messages</code><span class="rw">整理</span></td><td>移动到文件夹或存档</td></tr>
           <tr><td><code>delete_messages</code><span class="rw">整理</span></td><td>删除到「已删除邮件」，可从那里恢复；不会永久删除</td></tr>
-          <tr><td><code>list_events</code></td><td>某段时间内的日历会议：时间、组织者、参会人、是否重复</td></tr>
-          <tr><td><code>create_meeting</code><span class="rw">写入</span></td><td>创建会议并发送邀请；须经你确认（在确认窗口或对话中，按你在设置中的选择）</td></tr>
+          <tr><td><code>list_events</code></td><td>某段时间内的日历会议：时间、组织者、参会人、是否重复。可按文字、人员或你的答复筛选</td></tr>
+          <tr><td><code>get_current_and_next</code></td><td>当前正在进行的会议和下一场会议</td></tr>
+          <tr><td><code>find_events_with_person</code></td><td>与某人即将进行或已经进行的会议</td></tr>
+          <tr><td><code>get_event_details</code></td><td>会议详情：邀请内容、必需与可选参会人、各人答复、入会链接</td></tr>
+          <tr><td><code>find_free_slots</code></td><td>查找会议空闲时间：你的日历加上参会人在 Exchange 中的忙闲信息，限工作时间</td></tr>
+          <tr><td><code>create_meeting</code><span class="rw">写入</span></td><td>创建会议（可含可选参会人）并发送邀请；须经你确认（在确认窗口或对话中，按你在设置中的选择）；可在窗口中修改会议</td></tr>
           <tr><td><code>cancel_meeting</code><span class="rw">写入</span></td><td>取消你组织的会议（参会人会收到通知）、拒绝别人的会议，或删除没有参会人的事件；须在确认窗口中确认（默认关闭）</td></tr>
           <tr><td><code>reschedule_meeting</code><span class="rw">写入</span></td><td>改期你组织的会议，参会人会收到更新后的邀请；须在确认窗口中确认（默认关闭）</td></tr>
         </tbody>
@@ -415,12 +419,15 @@ owa-mail-mcp setup</pre><button class="copy" type="button" data-copy="#c-win">�
 
     <h3 class="sec-h">已有的保护</h3>
     <div class="sec">
-      <article class="card"><h3>密码存放在钥匙串</h3><p>Keychain、Credential Manager 或 Secret Service。不写入文件，不进日志，也不交给智能体：没有任何工具能显示密码。</p></article>
+      <article class="card"><h3>密码存放在钥匙串</h3><p>Keychain、Credential Manager 或 Secret Service。不写入文件，不进日志，也不交给智能体：没有任何工具能显示密码。密码与服务器绑定：设置中的地址被改动后，已保存的密码不会发往新地址。</p></article>
       <article class="card"><h3>只连你的服务器</h3><p>密码只会通过 HTTPS 发送到你指定的 Exchange 服务器。跳转到其他主机时不携带密码。</p></article>
       <article class="card"><h3>发送邮件，必须你点头</h3><p>默认关闭。每封邮件都要你在本地窗口中点击确认。隐藏字符、无效地址和收件人过多的邮件会被拒绝，外部地址会高亮显示。例外：你在设置中亲自指定的受信任收件人——发给他们的邮件会立即发出（每小时最多 20 封）。</p></article>
       <article class="card"><h3>本地窗口对外封闭</h3><p>仅监听 127.0.0.1，使用随机的秘密地址，校验 Host 和 Origin，禁止嵌入：其他网站无法访问。</p></article>
       <article class="card"><h3>按指纹校验证书</h3><p>常规证书校验保持开启。公司内部证书只接受那一张特定证书，按 SHA-256 指纹比对。</p></article>
       <article class="card"><h3>避免账号被锁</h3><p>密码被拒后会停止向 Exchange 发送请求，并限制请求频率。日志只记录工具名称和时间，不含邮件内容。</p></article>
+      <article class="card"><h3>设置带签名</h3><p>设置文件由钥匙串中的密钥签名。若有人绕过设置窗口修改了它，各项权限会恢复为安全的默认值，设置窗口和智能体都会提示。</p></article>
+      <article class="card"><h3>会议中没有隐藏文字</h3><p>会议主题、地点和内容中的不可见字符和文字方向标记会被拒绝：窗口里看到的，就是参会人会收到的。</p></article>
+      <article class="card"><h3>留出思考时间</h3><p>「发送」或「创建会议」按钮在卡片出现 3 秒后才可点击，误点不会生效。会议可以直接在窗口中修改。</p></article>
     </div>
 
     <h3 class="sec-h">程序解决不了的问题</h3>

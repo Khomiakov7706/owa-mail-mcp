@@ -1,3 +1,4 @@
+import keyring
 import json
 import urllib.request
 
@@ -23,11 +24,18 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     for var in ("OWA_MAIL_BACKEND", "OWA_MAIL_SERVER", "OWA_MAIL_EMAIL", "OWA_MAIL_PASSWORD", "OWA_MAIL_ALLOW_SEND"):
         monkeypatch.delenv(var, raising=False)
-    vault = {}
-    monkeypatch.setattr(config, "get_password", lambda login: vault.get(login))
-    monkeypatch.setattr(setup_mod, "get_password", lambda login: vault.get(login))
-    monkeypatch.setattr(setup_mod, "set_password", lambda login, pw: vault.__setitem__(login, pw))
-    return vault
+    return Vault()
+
+
+class Vault:
+    """The test keyring, by login: `vault[login]` is the password saved for that login, whatever the server."""
+
+    def __getitem__(self, login):
+        found = [v for (svc, user), v in keyring.get_keyring().data.items() if user.split("@@")[0] == login]
+        return found[0] if found else None
+
+    def save(self, login, server, password):
+        config.set_password(login, server, password)
 
 
 class Prober:
@@ -179,7 +187,7 @@ def test_status_tells_the_installer_whether_to_open_setup(isolated, capsys, monk
     assert status() == 2
     config.save_settings(Settings(server="owa.corp.ru", email="ivan@corp.ru", username="CORP\\ivan"))
     assert status() == 2  # no password yet
-    isolated["CORP\\ivan"] = "secret"
+    isolated.save("CORP\\ivan", "owa.corp.ru", "secret")
     assert status() == 0
     out = capsys.readouterr().out
     assert "password: saved" in out and "secret" not in out
@@ -241,7 +249,7 @@ def test_agent_commands_status_json_connect_and_prefill(isolated, capsys, monkey
     assert written["mcp"]["owa-mail"]["type"] == "local"
     assert connect("no-such-client") == 2
 
-    isolated["ivan@corp.ru"] = "secret"
+    isolated.save("ivan@corp.ru", "owa.corp.ru", "secret")
     capsys.readouterr()
     assert status(as_json=True) == 0
     out = capsys.readouterr().out

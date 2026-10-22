@@ -11,7 +11,7 @@ import logging
 import re
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
 
@@ -51,7 +51,7 @@ from .attachments import MAX_BYTES
 from .backend import AttachmentData, AuthenticationError, BackendError, FolderScope, SearchQuery, SearchResult, pick_attachment
 from .config import Settings
 from .models import Event, Message, MessageSummary, Outgoing, Person
-from .text import html_to_text, normalize_whitespace, preview
+from .text import find_join_url, html_to_text, normalize_whitespace, preview
 from .tls import PinningAdapter, apply_transport_settings
 
 class _FlagStatus(ExtendedProperty):
@@ -150,8 +150,10 @@ _HEADER_FIELDS = ("id", "subject", "sender", "datetime_received", "is_read", "ha
 _FULL_FIELDS = _SUMMARY_FIELDS + ("attachments", "message_id", "in_reply_to", "categories", "conversation_topic")
 _EVENT_FIELDS = (
     "id", "changekey", "subject", "start", "end", "is_all_day", "location", "organizer", "required_attendees",
-    "optional_attendees", "is_meeting", "type", "is_cancelled", "my_response_type",
+    "optional_attendees", "is_meeting", "type", "is_cancelled", "my_response_type", "legacy_free_busy_status",
 )
+_RESPONSES = {"Accept": "accepted", "Tentative": "tentative", "Decline": "declined", "Organizer": "organizer",
+              "NoResponseReceived": "not_responded", "Unknown": "not_responded"}
 _SCAN_CAP = 500
 _MAX_FOLDERS = 40
 _EPOCH = EWSDateTime(1970, 1, 1, tzinfo=ZoneInfo("UTC"))
@@ -656,12 +658,14 @@ class EWSBackend:
             is_organizer=is_organizer, attendees=attendees, is_meeting=is_meeting,
             kind={"Occurrence": "occurrence", "Exception": "exception"}.get(item.type or "", "single"),
             is_cancelled=bool(item.is_cancelled), my_response=response or None,
+            show_as=getattr(item, "legacy_free_busy_status", None) or "Busy",
         )
 
-    def _event_item(self, event_id: str):
+    def _event_item(self, event_id: str, extra: tuple[str, ...] = ()):
         def run():
             try:
-                return list(self.account.fetch(ids=[ItemId(id=event_id)], folder=self.account.calendar, only_fields=list(_EVENT_FIELDS)))
+                return list(self.account.fetch(ids=[ItemId(id=event_id)], folder=self.account.calendar,
+                                               only_fields=list(_EVENT_FIELDS + extra)))
             except (ErrorItemNotFound, ErrorInvalidIdMalformed):
                 return []
 
@@ -695,15 +699,55 @@ class EWSBackend:
         self._call(lambda: item.decline(body=note))
         return "declined"
 
-    def create_event(self, subject: str, start: datetime, end: datetime, attendees: list[str], location: str, body: str) -> Event:
+    def create_event(self, subject: str, start: datetime, end: datetime, attendees: list[str], location: str, body: str,
+                     optional: list[str] | None = None) -> Event:
         a = self.account
+        optional = list(optional or [])
         item = CalendarItem(
             account=a, folder=a.calendar, subject=subject, start=_ews_dt(start), end=_ews_dt(end), location=location or None,
             body=body or None, required_attendees=[Attendee(mailbox=Mailbox(email_address=x)) for x in attendees] or None,
+            optional_attendees=[Attendee(mailbox=Mailbox(email_address=x)) for x in optional] or None,
         )
-        invitations = "SendToAllAndSaveCopy" if attendees else "SendToNone"
+        invitations = "SendToAllAndSaveCopy" if attendees or optional else "SendToNone"
         self._call(lambda: item.save(send_meeting_invitations=invitations))
         return self.get_event(item.id)
+
+    def event_details(self, event_id: str) -> dict:
+        item = self._event_item(event_id, extra=("body",))
+        event = self._event(item)
+        me = (self.account.primary_smtp_address or "").lower()
+        attendees = []
+        for role, people in (("required", item.required_attendees), ("optional", item.optional_attendees)):
+            for attendee in people or []:
+                person = self._person(getattr(attendee, "mailbox", None))
+                if person is None:
+                    continue
+                attendees.append({"name": person.name, "email": person.email, "role": role,
+                                  "response": _RESPONSES.get(getattr(attendee, "response_type", None) or "Unknown", "not_responded"),
+                                  **({"is_you": True} if (person.email or "").lower() == me else {})})
+        raw = str(item.body or "")
+        return {"event": event, "agenda": self._body_text(item.body), "attendees": attendees,
+                "join_url": find_join_url(raw + "\n" + (item.location or ""))}
+
+    def free_busy(self, emails: list[str], start: datetime, end: datetime) -> dict[str, list[tuple[datetime, datetime]] | None]:
+        if not emails:
+            return {}
+
+        def run():
+            return list(self.account.protocol.get_free_busy_info(
+                accounts=[(e, "Required", False) for e in emails], start=_ews_dt(start), end=_ews_dt(end), requested_view="FreeBusy",
+            ))
+
+        views = self._call(run)
+        out: dict[str, list[tuple[datetime, datetime]] | None] = {}
+        for email, view in zip(emails, views):
+            events = getattr(view, "calendar_events", None) if not isinstance(view, Exception) else None
+            if view is None or isinstance(view, Exception) or getattr(view, "view_type", None) in (None, "None") \
+                    or any(getattr(e, "busy_type", None) == "NoData" for e in events or []):
+                out[email] = None
+                continue
+            out[email] = [(_utc_local(e.start), _utc_local(e.end)) for e in events or [] if e.busy_type in ("Busy", "Tentative", "OOF")]
+        return out
 
     def reschedule_event(self, event_id: str, start: datetime, end: datetime) -> None:
         item = self._event_item(event_id)
@@ -744,6 +788,13 @@ def _local(value) -> datetime | None:
         return None
     if not isinstance(value, datetime):  # an all-day event may come as a plain date
         return datetime(value.year, value.month, value.day).astimezone()
+    return datetime.fromtimestamp(value.timestamp()).astimezone()
+
+
+def _utc_local(value) -> datetime:
+    """Free/busy times come in the request's zone (UTC), sometimes without it."""
+    if value.tzinfo is None:
+        value = datetime(value.year, value.month, value.day, value.hour, value.minute, value.second, tzinfo=timezone.utc)
     return datetime.fromtimestamp(value.timestamp()).astimezone()
 
 

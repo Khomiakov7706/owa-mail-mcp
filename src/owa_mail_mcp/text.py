@@ -153,3 +153,80 @@ def normalize_body(body: str) -> str:
 
 def domain_of(email: str) -> str:
     return email.rsplit("@", 1)[-1].lower() if "@" in email else ""
+
+
+# --- meeting text policy ------------------------------------------------------------------------
+# A meeting goes to its attendees as the window (or the chat question) shows it. Characters that draw
+# nothing can carry any amount of hidden text under a short visible line, so they are refused, except
+# the joiners, presentation selectors and tags that emoji and some scripts need. Spaces that only look
+# like a plain one become one, and line-end spaces go: the window cannot show either difference.
+
+_DEFAULT_IGNORABLE = (
+    (0x00AD, 0x00AD), (0x034F, 0x034F), (0x061C, 0x061C), (0x115F, 0x1160), (0x17B4, 0x17B5), (0x180B, 0x180F),
+    (0x200B, 0x200F), (0x202A, 0x202E), (0x2060, 0x206F), (0x3164, 0x3164), (0xFE00, 0xFE0F), (0xFEFF, 0xFEFF),
+    (0xFFA0, 0xFFA0), (0xFFF0, 0xFFF8), (0x1BCA0, 0x1BCA3), (0x1D173, 0x1D17A), (0xE0000, 0xE0FFF),
+)
+_LOOKALIKE_SPACES = {0x00A0, *range(0x2000, 0x200B), 0x202F, 0x205F, 0x3000}
+
+
+def _ignorable(cp: int) -> bool:
+    return any(lo <= cp <= hi for lo, hi in _DEFAULT_IGNORABLE)
+
+
+def _emoji(cp: int) -> bool:
+    return (0x1F000 <= cp <= 0x1FAFF or 0x2600 <= cp <= 0x27BF or 0x2300 <= cp <= 0x23FF or 0x2B00 <= cp <= 0x2BFF
+            or cp in (0x00A9, 0x00AE, 0x203C, 0x2049, 0x2122, 0x2139, 0x3030, 0x303D, 0x3297, 0x3299))
+
+
+def _uses_joiners(cp: int) -> bool:
+    """Scripts that shape with ZWJ/ZWNJ: Arabic and Persian, Indic, Sinhala, Myanmar."""
+    return 0x0600 <= cp <= 0x06FF or 0x0750 <= cp <= 0x077F or 0x0900 <= cp <= 0x0DFF or 0x1000 <= cp <= 0x109F
+
+
+def has_invisible_text(text: str) -> bool:
+    """True when the text holds characters that draw nothing outside the places emoji and scripts need them."""
+    import unicodedata
+
+    cps = [ord(c) for c in text]
+    for i, cp in enumerate(cps):
+        prev = cps[i - 1] if i else None
+        nxt = cps[i + 1] if i + 1 < len(cps) else None
+        if unicodedata.category(chr(cp)) == "Cc":
+            if cp in (0x09, 0x0A, 0x0D):
+                continue
+            return True
+        if cp == 0x2800:  # a blank Braille cell looks like a space
+            return True
+        if not _ignorable(cp):
+            continue
+        if cp in (0x200C, 0x200D):
+            if prev is not None and nxt is not None and _uses_joiners(prev) and _uses_joiners(nxt):
+                continue
+            if cp == 0x200D and prev is not None and nxt is not None and (_emoji(prev) or prev in (0xFE0F,)) and _emoji(nxt):
+                continue
+            return True
+        if cp in (0xFE0E, 0xFE0F) and prev is not None and _emoji(prev):
+            continue
+        if 0xE0020 <= cp <= 0xE007F and prev is not None and (prev == 0x1F3F4 or 0xE0020 <= prev <= 0xE007F):
+            continue  # subdivision flags: a black flag followed by tag letters
+        return True
+    return False
+
+
+def normalize_spaces(text: str) -> str:
+    """Look-alike spaces become plain ones, spaces at line ends go."""
+    plain = "".join(" " if ord(c) in _LOOKALIKE_SPACES else c for c in text.replace("\r\n", "\n").replace("\r", "\n"))
+    return "\n".join(line.rstrip(" \t") for line in plain.split("\n"))
+
+
+_JOIN_HOSTS = ("teams.microsoft.com", "teams.live.com", "zoom.us", "meet.google.com", "webex.com", "telemost.yandex",
+               "ktalk.ru", "jazz.sber.ru", "salutejazz.ru", "vk.com/call", "bbb.", "jitsi", "skype.com", "lync.", "dialin.")
+
+
+def find_join_url(text: str) -> str | None:
+    """The first link to a known meeting service in the invitation (its HTML or the location)."""
+    for url in re.findall(r"https?://[^\s\"'<>)]+", text):
+        url = url.rstrip(".,;")
+        if any(host in url.lower() for host in _JOIN_HOSTS):
+            return html.unescape(url)
+    return None

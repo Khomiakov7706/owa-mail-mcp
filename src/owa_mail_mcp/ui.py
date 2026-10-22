@@ -66,7 +66,8 @@ class ConfirmationUI:
                 edited = _edited_message(self.broker, proposal_id, data["edits"])
             except KeyError:
                 return 404, {"error": "This message is no longer waiting.", "code": "gone"}
-        error = self.broker.decide(proposal_id, action == "approve", edited)
+        action_edits = data["edits"] if action == "approve" and isinstance(data.get("edits"), dict) and edited is None else None
+        error = self.broker.decide(proposal_id, action == "approve", edited, action_edits)
         if error:
             return 409, {"error": error, "code": getattr(error, "code", ""), "params": getattr(error, "params", {})}
         return 200, {"ok": True}

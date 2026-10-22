@@ -159,7 +159,7 @@ FYI — 9, newsletters — 25.</div>
 
   <div class="wrap">
     <dl class="stats">
-      <div><dt><b>19</b></dt><dd><span>tools for your agent</span></dd></div>
+      <div><dt><b>23</b></dt><dd><span>tools for your agent</span></dd></div>
       <div><dt><b>0</b></dt><dd><span>messages sent without your OK</span></dd></div>
       <div><dt><b>1</b></dt><dd><span>command to install</span></dd></div>
       <div><dt><b>MIT</b></dt><dd><span>open source, free</span></dd></div>
@@ -397,8 +397,12 @@ Don't ask me for my password — I'll type it myself in the setup window.</pre><
           <tr><td><code>update_messages</code><span class="rw">organize</span></td><td>Mark read or unread, set or clear the flag, add or remove categories</td></tr>
           <tr><td><code>move_messages</code><span class="rw">organize</span></td><td>Move to a folder or the archive</td></tr>
           <tr><td><code>delete_messages</code><span class="rw">organize</span></td><td>Delete to Deleted Items, where the message can be restored; never deletes permanently</td></tr>
-          <tr><td><code>list_events</code></td><td>Meetings in the calendar for a period: time, organizer, attendees, whether it repeats</td></tr>
-          <tr><td><code>create_meeting</code><span class="rw">write</span></td><td>Create a meeting and send invitations — after you confirm (in the window or in the chat, as you choose in setup)</td></tr>
+          <tr><td><code>list_events</code></td><td>Meetings in the calendar for a period: time, organizer, attendees, whether it repeats. Filter by text, person or your response</td></tr>
+          <tr><td><code>get_current_and_next</code></td><td>What’s on now and which meeting is next</td></tr>
+          <tr><td><code>find_events_with_person</code></td><td>Upcoming or past meetings with a person</td></tr>
+          <tr><td><code>get_event_details</code></td><td>One meeting in full: invitation text, who’s required, who answered, the join link</td></tr>
+          <tr><td><code>find_free_slots</code></td><td>Free time for a meeting: your calendar plus attendees’ Exchange free/busy, within working hours</td></tr>
+          <tr><td><code>create_meeting</code><span class="rw">write</span></td><td>Create a meeting (optional attendees too) and send invitations — after you confirm (in the window or in the chat, as you choose in setup); you can edit it in the window</td></tr>
           <tr><td><code>cancel_meeting</code><span class="rw">write</span></td><td>Cancel your meeting (attendees are notified), decline someone else's, or delete an event without attendees — only after you confirm in the window (off by default)</td></tr>
           <tr><td><code>reschedule_meeting</code><span class="rw">write</span></td><td>Move your meeting; attendees get the updated invitation — only after you confirm in the window (off by default)</td></tr>
         </tbody>
@@ -415,12 +419,15 @@ Don't ask me for my password — I'll type it myself in the setup window.</pre><
 
     <h3 class="sec-h">What’s protected</h3>
     <div class="sec">
-      <article class="card"><h3>Password in the keychain</h3><p>Keychain, Credential Manager or Secret Service. Not in a file, not in the log, not with the agent: no tool can reveal it.</p></article>
+      <article class="card"><h3>Password in the keychain</h3><p>Keychain, Credential Manager or Secret Service. Not in a file, not in the log, not with the agent: no tool can reveal it. It’s tied to the server: change the address in the settings and the saved password won’t go there.</p></article>
       <article class="card"><h3>Only your server</h3><p>The password goes only to the Exchange server you set, and only over HTTPS. Redirects to other hosts get no password.</p></article>
       <article class="card"><h3>Nothing is sent without your “yes”</h3><p>Off by default. Every message needs your click in a local window. Hidden characters, invalid addresses and too many recipients are rejected; external addresses are highlighted. The exception: recipients on the trusted list you set yourself in setup — emails to them go out at once (at most 20 an hour).</p></article>
       <article class="card"><h3>Local windows are locked down</h3><p>127.0.0.1 only, a secret random address, Host and Origin checks, no embedding: other sites can’t reach them.</p></article>
       <article class="card"><h3>Certificate pinning</h3><p>Standard certificate checks stay on. An internal company certificate is accepted only if it’s that exact one, by SHA-256.</p></article>
       <article class="card"><h3>No account lockouts</h3><p>After a rejected password, requests to Exchange stop, and request rates are limited. The log keeps only tool names and timestamps — no email content.</p></article>
+      <article class="card"><h3>Signed settings</h3><p>The settings file is signed with a key from the keychain. If it’s edited outside the setup window, permissions fall back to safe defaults, and both the window and the agent say so.</p></article>
+      <article class="card"><h3>No hidden text in meetings</h3><p>Invisible characters and text-direction marks are rejected in meeting subjects, locations and texts: the window shows exactly what attendees will get.</p></article>
+      <article class="card"><h3>Time to think</h3><p>The “Send” or “Create meeting” button wakes up 3 seconds after the card appears, so a stray click does nothing. You can edit a meeting right in the window.</p></article>
     </div>
 
     <h3 class="sec-h">What it doesn’t solve</h3>

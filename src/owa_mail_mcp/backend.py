@@ -115,8 +115,17 @@ class MailBackend(Protocol):
         tells the organizer (`declined`). A plain appointment is deleted (`deleted`)."""
         ...
 
-    def create_event(self, subject: str, start: datetime, end: datetime, attendees: list[str], location: str, body: str) -> Event:
+    def create_event(self, subject: str, start: datetime, end: datetime, attendees: list[str], location: str, body: str,
+                     optional: list[str] | None = None) -> Event:
         """Creates a meeting (invitations go to the attendees) or, without attendees, an appointment."""
+        ...
+
+    def event_details(self, event_id: str) -> dict:
+        """`event` (Event), `agenda` (text), `attendees` ({name, email, role: required|optional, response}), `join_url`."""
+        ...
+
+    def free_busy(self, emails: list[str], start: datetime, end: datetime) -> dict[str, list[tuple[datetime, datetime]] | None]:
+        """Busy intervals (busy, tentative, out of office) of each mailbox; None when Exchange has no data for it."""
         ...
 
     def reschedule_event(self, event_id: str, start: datetime, end: datetime) -> None:

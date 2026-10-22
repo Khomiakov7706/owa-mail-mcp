@@ -121,6 +121,8 @@ class Event:
     """`single`, `occurrence` or `exception` (one occurrence of a repeating meeting)."""
     is_cancelled: bool = False
     my_response: str | None = None
+    show_as: str = "Busy"
+    """Free, Tentative, Busy, OOF or WorkingElsewhere: how the event counts in free/busy."""
 
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {
@@ -141,4 +143,6 @@ class Event:
             out["cancelled"] = True
         if self.my_response and not self.is_organizer:
             out["my_response"] = self.my_response
+        if self.show_as and self.show_as != "Busy":
+            out["show_as"] = self.show_as
         return out

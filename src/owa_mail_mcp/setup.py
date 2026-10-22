@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 from . import __version__
 from .backend import AuthenticationError, BackendError, SearchQuery
-from .config import KeyringUnavailable, Settings, config_path, get_password, save_settings, set_password
+from .config import KeyringUnavailable, Settings, config_path, get_password, save_settings, server_host, set_password
 from .i18n import LANGUAGES, current_language, normalize, render_page, t
 from .runtime import read_journal
 from .text import is_valid_address
@@ -150,7 +150,7 @@ class SetupApp:
     def state(self) -> dict[str, Any]:
         settings = Settings.load(with_password=False)
         lang = current_language(settings)
-        stored = bool(get_password(settings.login)) if settings.login else False
+        stored = bool(get_password(settings.login, settings.server)) if settings.login else False
         command, args = server_command()
         return {
             "version": __version__,
@@ -164,6 +164,7 @@ class SetupApp:
             },
             "legacy_tls": list(settings.legacy_tls),
             "password_stored": stored,
+            "tampered": settings.tampered,
             "access": {
                 "allow_send": settings.allow_send,
                 "allow_calendar": settings.allow_calendar,
@@ -211,10 +212,12 @@ class SetupApp:
         settings = replace(saved, backend="ews", server=server, email=email, username=username, auth_type=auth, password=None, proxy=proxy)
         password = str(data.get("password") or "")
         if not password:
-            # An empty field means the stored password, but only for the login it was stored for.
-            password = get_password(settings.login) or ""
+            # An empty field means the stored password, but only for the login and the server it was entered for:
+            # a changed address never gets it.
+            password = get_password(settings.login, settings.server) or ""
             if not password:
-                return settings, t("msg.enter_password", lang)
+                moved = bool(get_password(saved.login, saved.server)) and server_host(saved.server) != server_host(settings.server)
+                return settings, t("msg.password_new_server" if moved else "msg.enter_password", lang)
         return replace(settings, password=password), None
 
     def test_connection(self, data: dict[str, Any]) -> tuple[int, Any]:
@@ -314,7 +317,7 @@ class SetupApp:
         with self._lock:
             if typed:
                 try:
-                    set_password(settings.login or "", typed)
+                    set_password(settings.login or "", settings.server, typed)
                 except KeyringUnavailable as exc:
                     return 200, {"ok": False, "error": t("msg.keyring_unavailable", error=str(exc.__cause__ or exc))}
             save_settings(replace(settings, password=None))

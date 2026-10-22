@@ -137,6 +137,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 2
   <section class="card">
     <h2>{{t:setup.s2_title}} <span class="saved" id="access-saved">{{t:setup.saved}}</span></h2>
     <p class="lead">{{t:setup.s2_lead}}</p>
+    <div class="warn" id="tampered" hidden>{{t:setup.tampered}}</div>
     <h3 class="block first">{{t:setup.mail_block}}</h3>
     <div class="switch">
       <input type="checkbox" id="allow-send">
@@ -264,6 +265,7 @@ function render(s) {
   badge.className = "badge " + (s.configured ? "ok" : "no");
   $("footer").textContent = T("footer", { version: s.version, path: s.config_path });
   $("done-row").hidden = !s.standalone;
+  $("tampered").hidden = !s.tampered;
   renderCerts(s.trusted_certificates);
   renderClients(s);
   renderJournal(s.journal);
