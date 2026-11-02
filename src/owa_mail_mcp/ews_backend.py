@@ -585,15 +585,16 @@ class EWSBackend:
 
     def save_draft(self, message: Outgoing) -> str | None:
         a = self.account
+        body = _body(message)
         to, cc, bcc = _mailboxes(message.to), _mailboxes(message.cc), _mailboxes(message.bcc)
         refers = message.forward_id or message.reply_to_id
         if refers:
             original = self._fetch(refers, ("id", "changekey", "subject"))
             make = original.create_forward if message.forward_id else original.create_reply
-            self._call(lambda: make(subject=message.subject, body=message.body, to_recipients=to, cc_recipients=cc,
+            self._call(lambda: make(subject=message.subject, body=body, to_recipients=to, cc_recipients=cc,
                                     bcc_recipients=bcc).save(a.drafts))
             return None
-        draft = EwsMessage(account=a, folder=a.drafts, subject=message.subject, body=message.body,
+        draft = EwsMessage(account=a, folder=a.drafts, subject=message.subject, body=body,
                            to_recipients=to, cc_recipients=cc, bcc_recipients=bcc)
         self._call(draft.save)
         return draft.id
@@ -760,22 +761,32 @@ class EWSBackend:
 
     def send(self, message: Outgoing) -> str | None:
         a = self.account
+        body = _body(message)
         to = [Mailbox(email_address=x) for x in message.to]
         cc = [Mailbox(email_address=x) for x in message.cc] or None
         bcc = [Mailbox(email_address=x) for x in message.bcc] or None
         if message.forward_id:
             original = self._fetch(message.forward_id, ("id", "changekey", "subject"))
             # Exchange attaches the original's attachments and quotes it below, as Outlook does.
-            self._call(lambda: original.forward(subject=message.subject, body=message.body, to_recipients=to, cc_recipients=cc, bcc_recipients=bcc))
+            self._call(lambda: original.forward(subject=message.subject, body=body, to_recipients=to, cc_recipients=cc, bcc_recipients=bcc))
             return None
         if message.reply_to_id:
             original = self._fetch(message.reply_to_id, ("id", "changekey", "subject"))
             # Exchange quotes the original under the reply, as Outlook does.
-            self._call(lambda: original.reply(subject=message.subject, body=message.body, to_recipients=to, cc_recipients=cc, bcc_recipients=bcc))
+            self._call(lambda: original.reply(subject=message.subject, body=body, to_recipients=to, cc_recipients=cc, bcc_recipients=bcc))
             return None
-        outgoing = EwsMessage(account=a, folder=a.sent, subject=message.subject, body=message.body, to_recipients=to, cc_recipients=cc, bcc_recipients=bcc)
+        outgoing = EwsMessage(account=a, folder=a.sent, subject=message.subject, body=body, to_recipients=to, cc_recipients=cc, bcc_recipients=bcc)
         self._call(outgoing.send_and_save)
         return None
+
+
+def _body(message: Outgoing):
+    """Plain text as is; Markdown as HTML that the server builds itself (formatting.py), never HTML from the agent."""
+    if message.format == "markdown":
+        from .formatting import to_html
+
+        return HTMLBody(to_html(message.body))
+    return Body(message.body)
 
 
 def _mailboxes(addresses: list[str]) -> list[Mailbox] | None:

@@ -49,6 +49,13 @@ label { display: block; font-size: 13px; color: var(--muted); margin-top: 10px; 
 input, textarea { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 4px; }
 textarea { min-height: 220px; resize: vertical; }
 textarea.short { min-height: 110px; }
+div.rich { white-space: normal; word-break: break-word; background: var(--bg); border-radius: 8px; padding: 12px; margin: 10px 0 0; max-height: 50vh; overflow: auto; }
+.rich p, .rich ul, .rich ol { margin: 0 0 10px; }
+.rich h3, .rich h4, .rich h5 { margin: 4px 0 8px; }
+.rich ul, .rich ol { padding-left: 22px; }
+.rich a { color: var(--accent, #0b62d6); pointer-events: none; }
+.rich .url { color: var(--muted); font-size: 12px; word-break: break-all; }
+.rich code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
 .err { color: var(--danger); margin-top: 10px; font-size: 13px; }
 .done { display: flex; justify-content: space-between; gap: 12px; padding: 10px 14px; }
 .done .s { white-space: nowrap; font-size: 13px; }
@@ -93,6 +100,14 @@ function el(tag, attrs, ...children) {
   }
   for (const c of children.flat()) if (c !== null && c !== undefined) node.append(c instanceof Node ? c : document.createTextNode(String(c)));
   return node;
+}
+
+// A formatted message: the server built this HTML from Markdown with escaping and a fixed set of tags,
+// the same code that builds the email. Links show their real address and do not open from here.
+function rich(htmlText) {
+  const box = el("div", { class: "body rich" });
+  box.innerHTML = htmlText;
+  return box;
 }
 
 function chips(list, external) {
@@ -225,7 +240,7 @@ function pendingCard(item) {
       return [el("label", {}, label), input];
     };
     card.append(...field("to", T("field_to")), ...field("cc", T("field_cc")), ...field("bcc", T("field_bcc")),
-                ...field("subject", T("field_subject")), ...field("body", T("field_body"), true));
+                ...field("subject", T("field_subject")), ...field("body", T(m.format === "markdown" ? "field_body_markdown" : "field_body"), true));
     card.append(el("div", { class: "actions" },
       approveButton(item.id, T("send_edited"), () => decide(item.id, "approve", draft)),
       el("button", { onclick: () => { editing.delete(item.id); render(window.__items || [], true); } }, T("cancel_edits")),
@@ -239,9 +254,9 @@ function pendingCard(item) {
       el("div", { class: "row" }, el("div", { class: "k" }, T("subject")), el("div", { class: "subject" }, m.subject)),
       item.reply_context && item.reply_context.forward && item.reply_context.attachments.length
         ? el("div", { class: "row" }, el("div", { class: "k" }, T("attachments")), el("div", {}, item.reply_context.attachments.join(", "))) : null,
-      m.body ? el("pre", { class: "body" }, m.body) : null));
+      item.body_html ? rich(item.body_html) : m.body ? el("pre", { class: "body" }, m.body) : null));
     const warnings = [...(item.external.length ? [T("external_count", { n: item.external.length })] : []),
-                      ...item.warnings.map((w, i) => said(w, (item.warning_codes || [])[i]))];
+                      ...item.warnings.map((w, i) => said(w, (item.warning_codes || [])[i], (item.warning_params || [])[i]))];
     if (warnings.length) card.append(el("div", { class: "warn" }, el("ul", {}, warnings.map(w => el("li", {}, w)))));
     card.append(el("div", { class: "actions" },
       approveButton(item.id, T("send"), () => decide(item.id, "approve")),

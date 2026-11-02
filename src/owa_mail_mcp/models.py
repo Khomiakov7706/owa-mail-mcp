@@ -84,6 +84,8 @@ class Outgoing:
     reply_to_id: str | None = None
     forward_id: str | None = None
     """Forward this message (with its attachments) instead of writing a new one."""
+    format: str = "text"
+    """`text`, or `markdown`: the server turns the body into HTML (see formatting.py)."""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -94,11 +96,12 @@ class Outgoing:
             "body": self.body,
             "reply_to_message_id": self.reply_to_id,
             "forward_message_id": self.forward_id,
+            "format": self.format,
         }
 
     def fingerprint(self) -> tuple:
         norm = lambda xs: tuple(sorted(x.lower() for x in xs))  # noqa: E731
-        return (norm(self.to), norm(self.cc), norm(self.bcc), self.subject.strip(), self.body.strip(), self.reply_to_id, self.forward_id)
+        return (norm(self.to), norm(self.cc), norm(self.bcc), self.subject.strip(), self.body.strip(), self.reply_to_id, self.forward_id, self.format)
 
 
 @dataclass

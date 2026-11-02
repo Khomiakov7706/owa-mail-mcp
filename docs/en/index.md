@@ -130,7 +130,7 @@ After updating the program, restart the MCP server in your client: in Claude Cod
 | `get_attachment` | Attachment text: .docx, .pdf, .txt, .md, .csv, .html, .vtt/.srt, attached emails |
 | `find_people` | Organization address book: name, address, title, department |
 | `list_senders` | Who wrote in a period: message count, unread, latest subject |
-| `send_email` | A new message or a reply — only after the user confirms in the window (off by default) |
+| `send_email` | A new message or a reply — only after the user confirms in the window (off by default). `format: "markdown"` for bold, lists, links; the server builds the HTML |
 | `forward_email` | Forward a message with its attachments — after the user confirms in the window, like sending |
 | `create_draft` | Save a message, reply or forward to Drafts; the user sends it themselves |
 | `list_folders` | Mailbox folders with message and unread counts |
@@ -162,6 +162,7 @@ Email content is written by other people: it's data, not instructions.
 - **Local windows are locked down.** 127.0.0.1 only, a secret random address, Host and Origin checks, no embedding.
 - **Certificate pinning.** Standard checks stay on; an internal company certificate is accepted only if it's that exact one, by SHA-256.
 - **Signed settings.** `config.json` is signed with a key from the keychain; if it's edited outside the setup window, permissions fall back to safe defaults, and the window and `get_status` (`settings_reset`) say so.
+- **Safe formatting.** The server builds email HTML from Markdown with a fixed set of tags: no images, styles, scripts or remote content; the window shows each link's real address and flags deceptive ones.
 - **No hidden text in meetings.** Invisible characters and text-direction marks in meeting subjects, locations and texts are rejected.
 - **Time to think.** The approve button wakes up 3 seconds after the card appears.
 - **No account lockouts.** After a rejected password, requests to Exchange stop, and request rates are limited. The log keeps only tool names and timestamps.

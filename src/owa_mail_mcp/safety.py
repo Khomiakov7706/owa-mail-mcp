@@ -88,6 +88,11 @@ def check_outgoing(message: Outgoing, *, my_email: str | None, internal_domains:
         review.warnings.append(Coded("The text contains invisible characters (zero-width spaces or similar).", "invisible"))
     if message.bcc:
         review.warnings.append(Coded("There are hidden copies (Bcc).", "bcc"))
+    if message.format == "markdown":
+        from .formatting import misleading_links
+
+        for link in misleading_links(message.body)[:5]:
+            review.warnings.append(Coded(f"A link's text names one site but it leads to another: {link}", "link_mismatch", link=link))
     return review
 
 

@@ -60,17 +60,28 @@ class Proposal:
             "client": self.client,
             "from": self.sender,
             "message": self.message.to_dict() if self.message else None,
+            "body_html": _preview(self.message),
             "action": self.action,
             "auto": self.auto,
             "via": self.via,
             "external": self.review.external,
             "warnings": self.review.warnings,
             "warning_codes": [getattr(w, "code", "") for w in self.review.warnings],
+            "warning_params": [getattr(w, "params", {}) for w in self.review.warnings],
             "reply_context": self.reply_context,
             "seconds_left": max(0, int(self.deadline - now)) if self.status == Status.PENDING else 0,
             "edited": self.edited,
             "error": self.error,
         }
+
+
+def _preview(message: Outgoing | None) -> str | None:
+    """The formatted message as the window shows it, built by the same code that builds the email."""
+    if message is None or message.format != "markdown":
+        return None
+    from .formatting import to_html
+
+    return to_html(message.body, preview=True)
 
 
 class BrokerBusy(Exception):

@@ -96,4 +96,6 @@ def _edited_message(broker: ConfirmationBroker, proposal_id: str, edits: dict[st
         subject=str(edits.get("subject", current.subject)),
         body=str(edits.get("body", current.body)),
         reply_to_id=current.reply_to_id,
+        forward_id=current.forward_id,
+        format=current.format,
     )
