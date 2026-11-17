@@ -45,6 +45,12 @@ def russian_interface(monkeypatch):
     monkeypatch.setenv("OWA_MAIL_LANG", "ru")
 
 
+@pytest.fixture(autouse=True)
+def no_update_check(monkeypatch):
+    """No calls to GitHub from tests; test_updates turns the check on with a fake download."""
+    monkeypatch.setenv("OWA_MAIL_UPDATE_CHECK", "0")
+
+
 @pytest.fixture
 def anyio_backend():
     return "asyncio"

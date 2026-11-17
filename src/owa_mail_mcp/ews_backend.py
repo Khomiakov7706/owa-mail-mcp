@@ -589,15 +589,26 @@ class EWSBackend:
         to, cc, bcc = _mailboxes(message.to), _mailboxes(message.cc), _mailboxes(message.bcc)
         refers = message.forward_id or message.reply_to_id
         if refers:
-            original = self._fetch(refers, ("id", "changekey", "subject"))
-            make = original.create_forward if message.forward_id else original.create_reply
-            self._call(lambda: make(subject=message.subject, body=body, to_recipients=to, cc_recipients=cc,
-                                    bcc_recipients=bcc).save(a.drafts))
+            draft = self._reply_draft(message, body, to, cc, bcc)
+            if message.attachments:
+                self._attach(draft, message)
             return None
         draft = EwsMessage(account=a, folder=a.drafts, subject=message.subject, body=body,
-                           to_recipients=to, cc_recipients=cc, bcc_recipients=bcc)
+                           to_recipients=to, cc_recipients=cc, bcc_recipients=bcc, attachments=_files(message))
         self._call(draft.save)
         return draft.id
+
+    def _reply_draft(self, message: Outgoing, body, to, cc, bcc):
+        """A reply or forward saved in Drafts (Exchange quotes the original and, for a forward, keeps its attachments)."""
+        original = self._fetch(message.forward_id or message.reply_to_id, ("id", "changekey", "subject"))
+        make = original.create_forward if message.forward_id else original.create_reply
+        saved = self._call(lambda: make(subject=message.subject, body=body, to_recipients=to, cc_recipients=cc,
+                                        bcc_recipients=bcc).save(self.account.drafts))
+        return self._fetch(saved.id, ("id", "changekey", "subject"))
+
+    def _attach(self, item, message: Outgoing) -> None:
+        for f in _files(message):
+            self._call(lambda f=f: item.attach(f))
 
     def _items(self, message_ids: list[str], fields) -> list:
         def run():
@@ -765,6 +776,12 @@ class EWSBackend:
         to = [Mailbox(email_address=x) for x in message.to]
         cc = [Mailbox(email_address=x) for x in message.cc] or None
         bcc = [Mailbox(email_address=x) for x in message.bcc] or None
+        if message.attachments and (message.forward_id or message.reply_to_id):
+            # A reply or forward with files of our own: saved as a draft, the files added, then sent from there.
+            draft = self._reply_draft(message, body, to, cc, bcc)
+            self._attach(draft, message)
+            self._call(lambda: draft.send(save_copy=True, copy_to_folder=a.sent))
+            return None
         if message.forward_id:
             original = self._fetch(message.forward_id, ("id", "changekey", "subject"))
             # Exchange attaches the original's attachments and quotes it below, as Outlook does.
@@ -775,7 +792,8 @@ class EWSBackend:
             # Exchange quotes the original under the reply, as Outlook does.
             self._call(lambda: original.reply(subject=message.subject, body=body, to_recipients=to, cc_recipients=cc, bcc_recipients=bcc))
             return None
-        outgoing = EwsMessage(account=a, folder=a.sent, subject=message.subject, body=body, to_recipients=to, cc_recipients=cc, bcc_recipients=bcc)
+        outgoing = EwsMessage(account=a, folder=a.sent, subject=message.subject, body=body, to_recipients=to, cc_recipients=cc,
+                              bcc_recipients=bcc, attachments=_files(message))
         self._call(outgoing.send_and_save)
         return None
 
@@ -787,6 +805,10 @@ def _body(message: Outgoing):
 
         return HTMLBody(to_html(message.body))
     return Body(message.body)
+
+
+def _files(message: Outgoing) -> list:
+    return [FileAttachment(name=f.name, content=f.data, content_type=f.content_type) for f in message.attachments]
 
 
 def _mailboxes(addresses: list[str]) -> list[Mailbox] | None:

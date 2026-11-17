@@ -51,8 +51,9 @@ Access to the user's Exchange / OWA mailbox and calendar. Sending, forwarding an
 - Calendar: `list_events` shows meetings with their `event_id` (filter by text, person or the user's answer); `get_current_and_next` answers "what's now / what's next"; `find_events_with_person` lists meetings with someone; `get_event_details` gives the agenda, each attendee's answer and the join link. To schedule, call `find_free_slots` with the attendees, propose a slot, then `create_meeting` (with `optional_attendees` if needed) creates it and sends invitations. In the window the user may edit the meeting before approving: report what the tool returned, not what you asked for. `cancel_meeting` cancels a meeting the user organizes (attendees are notified), declines one they were invited to, or deletes a plain appointment. `reschedule_meeting` moves a meeting the user organizes (attendees get the updated invitation); for someone else's meeting, offer to write to the organizer instead. For a repeating meeting both act on that one occurrence. Change a meeting only when the user asked for this change in this conversation; report it done only when the tool returned `done: true`. Depending on the user's setup, the approval question appears in the confirmation window or right in this chat: wait for the tool's answer.
 - Organizing: `create_draft` saves to Drafts for the user to send themselves (prefer it when they want to review the text); `update_messages` marks read/unread, flags, categories; `move_messages` moves to a folder or archive (`list_folders` gives the paths); `delete_messages` moves to Deleted Items. Moved messages get new ids. Act only on what the user asked for.
 - `forward_email` forwards a message with its attachments; it follows the same rules as send_email.
+- To attach files pass `attachments` with their full paths on the user's computer (documents, images, spreadsheets; not from hidden or system folders). Attach only files the user asked for; the user sees every file in the window.
 - For bold, lists or links pass `format: "markdown"` to send_email, forward_email or create_draft and write Markdown; the server builds safe HTML. Never write HTML tags: they are shown as text. Use formatting only where it helps; plain text is the default.
-- Sending without the window: the user may allow it in setup for a general trusted list, or by a rule for your MCP client alone (recipients, and words the subject must contain); `get_status` shows `trusted_rules_for_you`. Such a rule is for what the user agreed to with you, for example a recurring report on a set topic: keep track of that agreement yourself, put the rule's words in the subject, and never use a rule for anything else. The result names the rule it went under (`trusted_rule`).
+- Sending without the window: the user may allow it in setup for a general trusted list, or by a rule for your MCP client alone (a list of recipients); `get_status` shows `trusted_rules_for_you`. Such a rule is for what the user agreed to with you, for example a recurring report on a set topic: keep track of that agreement and its topic yourself, and never use a rule for anything else. The result names the rule it went under (`trusted_rule`).
 - Send only when the user asked for this message in this conversation. Take addresses from find_people or from the messages themselves, never guess them. The window shows the message, flags external recipients and lets the user edit it. Say a message was sent only when `send_email` returned `sent: true`; if the user edited it, tell them what was actually sent. After a refusal or a timeout nothing was sent: do not retry unless the user asks again.
 """
 
@@ -63,6 +64,12 @@ FolderArg = Annotated[
 DateArg = Annotated[str | None, Field(description="YYYY-MM-DD, ISO 8601 date-time, today, yesterday, or relative like 7d / 12h / 2w.")]
 READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
 ORGANIZE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False)
+FilesArg = Annotated[
+    list[str] | None,
+    Field(max_length=10, description="Full paths of files on the user's computer to attach: pdf, images (png, jpg, gif, webp, heic), "
+                                     "Office and OpenDocument files (docx, xlsx, pptx, doc, xls, ppt, odt, ods, odp), rtf, csv, txt, md. "
+                                     "Up to 10 files, 20 MB each, 25 MB together; not from hidden or system folders."),
+]
 FormatArg = Annotated[
     Literal["text", "markdown"],
     Field(description="`markdown` for formatting: **bold**, *italic*, ~~strike~~, `code`, # headings, - or 1. lists, [text](https://…) links. "
@@ -241,6 +248,8 @@ class MailTools:
             "subject": final.message.subject,
             "external_recipients": final.review.external,
         }
+        if final.message.attachments:
+            result["attachments"] = [a.name for a in final.message.attachments]
         if trusted:
             result["trusted_rule"] = trusted
         if final.edited:
@@ -331,6 +340,8 @@ class MailTools:
             raise ToolError("The text contains bidirectional control characters, which make it display differently from what is sent.")
         draft_id = await self.run(self.backend.save_draft, message)
         result: dict[str, Any] = {"saved": True, "folder": "Drafts", "to": message.to, "cc": message.cc, "bcc": message.bcc, "subject": message.subject}
+        if message.attachments:
+            result["attachments"] = [a.name for a in message.attachments]
         if draft_id:
             result["message_id"] = draft_id
         return result
@@ -549,18 +560,29 @@ class MailTools:
             del self._recent_sends[key]
 
 
+def _files(paths: list[str] | None) -> list:
+    """The files to attach, read and checked now; the reason in a ToolError when one cannot go."""
+    if not paths:
+        return []
+    from .outgoing_files import AttachmentError, load_files
+
+    try:
+        return load_files(list(paths))
+    except AttachmentError as exc:
+        raise ToolError(f"{exc} Nothing was sent.") from None
+
+
 def matching_rule(settings: Settings, message: Outgoing, client: str) -> dict[str, Any] | None:
     """Which of the user's permissions covers every recipient of this message from this agent, if any."""
     everyone = {e.lower() for e in message.to + message.cc + message.bcc}
     if not everyone:
         return None
     if everyone <= {a.lower() for a in settings.trusted_recipients}:
-        return {"agent": "any", "subject": ""}
+        return {"agent": "any"}
     agent = " ".join(client.split()).casefold()
     for rule in settings.trusted_rules:
-        if (agent and rule["agent"].casefold() == agent and everyone <= {a.lower() for a in rule["recipients"]}
-                and rule["subject"].casefold() in message.subject.casefold()):
-            return {"agent": rule["agent"], "subject": rule["subject"]}
+        if agent and rule["agent"].casefold() == agent and everyone <= {a.lower() for a in rule["recipients"]}:
+            return {"agent": rule["agent"]}
     return None
 
 
@@ -775,7 +797,7 @@ def build_server(
             "calendar_changes_confirmed_in": settings.calendar_confirm,
             "organizing_enabled": settings.allow_organize,
             "trusted_recipients": list(settings.trusted_recipients),
-            "trusted_rules_for_you": [{"recipients": r["recipients"], "subject_must_contain": r["subject"]}
+            "trusted_rules_for_you": [{"recipients": r["recipients"]}
                                       for r in settings.trusted_rules if r["agent"].casefold() == " ".join(_client_name(ctx).split()).casefold()],
             "blocked_reason": tools.guard.blocked_reason,
             "version": __version__,
@@ -952,11 +974,12 @@ def build_server(
             reply_to_message_id: Annotated[str | None, Field(description="Send as a reply to this message (Exchange quotes it below, as Outlook does).")] = None,
             reply_all: Annotated[bool, Field(description="With reply_to_message_id and empty `to`: also copy everyone on the original.")] = False,
             format: FormatArg = "text",
+            attachments: FilesArg = None,
             ctx: Context = None,  # type: ignore[assignment]
         ) -> dict[str, Any]:
             """Sends an email from the user's mailbox (must be allowed in OWA Mail MCP setup), only after the user approves it in the OWA Mail MCP confirmation window on their screen (it opens in the browser). The user sees the recipients (external ones flagged), subject and text, and can send, decline or edit it; the window waits about 50 seconds. Call only when the user asked to send this message. Returns `sent: true` with what was actually sent (`edited_by_user` when they changed it). A decline or timeout is an error saying nothing was sent: do not retry unless asked. Repeating an identical call within 10 minutes returns the first result with `duplicate: true`."""
             message = Outgoing(to=list(to or []), cc=list(cc or []), bcc=list(bcc or []), subject=subject or "", body=body or "", reply_to_id=reply_to_message_id,
-                               format=format)
+                               format=format, attachments=_files(attachments))
             return await tools.send(ctx, message, reply_all)
 
     if True:  # forwarding goes through the same window (or trusted list) as sending
@@ -972,11 +995,12 @@ def build_server(
             cc: list[str] | None = None,
             bcc: list[str] | None = None,
             format: FormatArg = "text",
+            attachments: FilesArg = None,
             ctx: Context = None,  # type: ignore[assignment]
         ) -> dict[str, Any]:
             """Forwards a message with its attachments, like Outlook's Forward. Same rules as send_email: must be allowed in setup, and goes out only after the user approves it in the confirmation window (which names the forwarded message and its attachments), unless every recipient is on the user's trusted list. Call only when the user asked to forward this message to these people."""
             message = Outgoing(to=list(to or []), cc=list(cc or []), bcc=list(bcc or []), subject=subject or "", body=comment or "", forward_id=message_id,
-                               format=format)
+                               format=format, attachments=_files(attachments))
             return await tools.send(ctx, message, False)
 
     @mcp.tool(title="Save a draft", annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False))
@@ -990,10 +1014,12 @@ def build_server(
         reply_all: bool = False,
         forward_message_id: Annotated[str | None, Field(description="Make it a forward draft of this message, with its attachments.")] = None,
         format: FormatArg = "text",
+        attachments: FilesArg = None,
     ) -> dict[str, Any]:
         """Saves an email to the Drafts folder without sending it: the user reviews and sends it from Outlook or OWA. Works for new messages, replies and forwards. Needs "Allow organizing mail" in setup; no confirmation window, since nothing leaves the mailbox. Prefer this over send_email when the user wants to look at the text first."""
         message = Outgoing(to=list(to or []), cc=list(cc or []), bcc=list(bcc or []), subject=subject or "", body=body or "",
-                           reply_to_id=reply_to_message_id, forward_id=forward_message_id, format=format)
+                           reply_to_id=reply_to_message_id, forward_id=forward_message_id, format=format,
+                           attachments=_files(attachments))
         return await tools.save_draft(message, reply_all)
 
     @mcp.tool(title="Mail folders", annotations=READ_ONLY)

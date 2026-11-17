@@ -118,7 +118,7 @@ def render_page(name: str, lang: str) -> str:
     page = (Path(__file__).parent / name).read_text(encoding="utf-8")
     texts = catalog(lang)
     prefix = name.split("_")[0] + "."
-    for_script = {k: v for k, v in texts.items() if k.startswith((prefix, "policy."))}
+    for_script = {k: v for k, v in texts.items() if k.startswith((prefix, "policy.", "update."))}
     script_json = json.dumps(for_script, ensure_ascii=False).replace("</", "<\\/")
     page = re.sub(r"\{\{t:([\w.]+)\}\}", lambda m: html.escape(texts.get(m.group(1), m.group(1))), page)
     return page.replace("{{LANG}}", lang).replace("{{I18N}}", script_json)

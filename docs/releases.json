@@ -1,0 +1,44 @@
+{
+  "releases": [
+    {
+      "version": "0.11.0",
+      "date": "2026-11-17",
+      "notes": {
+        "ru": ["Вложения в письмах: PDF, картинки, Word, Excel, PowerPoint, CSV и текст. Окно показывает каждый файл, лишний можно снять", "Файлы из скрытых и системных папок не отправляются; содержимое должно совпадать с типом файла", "Правила для агентов упрощены: агент и получатели, без условия на тему", "Окна сообщают о новых версиях и показывают, что в них изменилось"],
+        "en": ["Attachments: PDF, images, Word, Excel, PowerPoint, CSV and text. The window lists every file, and you can take one off", "Files from hidden and system folders are refused; a file's content must match its type", "Rules for agents are simpler: an agent and its recipients, no subject condition", "The windows tell you about new versions and what changed in them"],
+        "zh": ["邮件附件：PDF、图片、Word、Excel、PowerPoint、CSV 和文本。窗口会列出每个文件，可以去掉不需要的", "不发送隐藏和系统文件夹中的文件；文件内容必须与其类型一致", "智能体规则简化：只需智能体和收件人，不再限制主题", "窗口会提示新版本及其更新内容"],
+        "es": ["Adjuntos: PDF, imágenes, Word, Excel, PowerPoint, CSV y texto. La ventana muestra cada archivo y puedes quitar uno", "No se envían archivos de carpetas ocultas o del sistema; el contenido debe coincidir con el tipo", "Reglas para agentes más simples: un agente y sus destinatarios, sin condición de asunto", "Las ventanas avisan de nuevas versiones y de lo que cambió"]
+      }
+    },
+    {
+      "version": "0.10.0",
+      "date": "2026-11-17",
+      "notes": {
+        "ru": ["Отсчёт в окне подтверждения можно поставить на паузу", "Длинное письмо больше не прокручивается к началу само", "Правила для агентов: письма от выбранного агента выбранным получателям без окна"],
+        "en": ["The countdown in the confirmation window can be paused", "A long message no longer jumps back to the top while you read it", "Rules for agents: emails from a chosen agent to chosen recipients skip the window"],
+        "zh": ["确认窗口中的倒计时可以暂停", "长邮件阅读时不再自动跳回开头", "智能体规则：所选智能体发给所选收件人的邮件无需确认窗口"],
+        "es": ["La cuenta atrás de la ventana de confirmación se puede pausar", "Un correo largo ya no vuelve solo al principio mientras lo lees", "Reglas para agentes: los correos de un agente elegido a destinatarios elegidos no pasan por la ventana"]
+      }
+    },
+    {
+      "version": "0.9.1",
+      "date": "2026-11-02",
+      "notes": {
+        "ru": ["Форматирование писем: жирный, курсив, списки, ссылки. HTML собирает сама программа", "Окно показывает настоящий адрес каждой ссылки и предупреждает об обманчивых"],
+        "en": ["Formatted email: bold, italic, lists, links. The program builds the HTML itself", "The window shows each link's real address and warns about deceptive ones"],
+        "zh": ["邮件格式：粗体、斜体、列表、链接。HTML 由程序自己生成", "窗口显示每个链接的真实地址，并对欺骗性链接发出警告"],
+        "es": ["Correos con formato: negrita, cursiva, listas, enlaces. El HTML lo genera el propio programa", "La ventana muestra la dirección real de cada enlace y avisa de los engañosos"]
+      }
+    },
+    {
+      "version": "0.9.0",
+      "date": "2026-10-22",
+      "notes": {
+        "ru": ["Поиск свободного времени для встречи и подробности встречи", "Встречу можно поправить прямо в окне подтверждения", "Пароль привязан к серверу, настройки подписаны"],
+        "en": ["Find free time for a meeting, and meeting details", "A meeting can be edited right in the confirmation window", "The password is tied to the server; the settings are signed"],
+        "zh": ["查找会议空闲时间，查看会议详情", "可以直接在确认窗口中修改会议", "密码与服务器绑定；设置带签名"],
+        "es": ["Buscar hueco para una reunión y ver sus detalles", "La reunión se puede editar en la ventana de confirmación", "La contraseña queda ligada al servidor; la configuración va firmada"]
+      }
+    }
+  ]
+}

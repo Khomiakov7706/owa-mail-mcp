@@ -21,6 +21,7 @@ from .backend import AuthenticationError, BackendError, SearchQuery
 from .config import KeyringUnavailable, Settings, config_path, get_password, save_settings, server_host, set_password
 from .i18n import LANGUAGES, current_language, normalize, render_page, t
 from .runtime import read_journal
+from .updates import status as update_status
 from .text import is_valid_address
 from .tls import LegacyTLSRequired, ServerUnreachable, apply_transport_settings, format_fingerprint, host_port, pin_key, probe
 from .web import LocalWebApp
@@ -180,6 +181,7 @@ class SetupApp:
             "config_path": str(config_path()),
             "command": [command, *args],
             "snippets": snippets(command, args, lang),
+            "update": update_status(lang),
             "installers": self._installers(lang),
             "language": normalize(settings.language) or "",
             "languages": LANGUAGES,
@@ -531,8 +533,7 @@ def parse_rules(raw: Any) -> tuple[tuple[dict, ...] | None, str | None]:
         rule = rule if isinstance(rule, dict) else {}
         agent = " ".join(str(rule.get("agent") or "").split())
         recipients = parse_addresses(str(rule.get("recipients") or ""))
-        subject = " ".join(str(rule.get("subject") or "").split())
-        if not agent and not recipients and not subject:
+        if not agent and not recipients:
             continue  # an empty row the user has not filled in yet
         if not agent:
             return None, t("msg.rule_invalid", n=n, reason=t("msg.rule_no_agent"))
@@ -541,9 +542,9 @@ def parse_rules(raw: Any) -> tuple[tuple[dict, ...] | None, str | None]:
         bad = [a for a in recipients if not is_valid_address(a)]
         if bad:
             return None, t("msg.rule_invalid", n=n, reason=t("msg.trusted_invalid", list=", ".join(bad[:5])))
-        if len(agent) > 80 or len(subject) > 200:
+        if len(agent) > 80:
             return None, t("msg.rule_invalid", n=n, reason=t("msg.rule_too_long"))
-        out.append({"agent": agent, "recipients": recipients, "subject": subject})
+        out.append({"agent": agent, "recipients": recipients})
     return tuple(out), None
 
 

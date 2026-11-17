@@ -86,6 +86,8 @@ class Outgoing:
     """Forward this message (with its attachments) instead of writing a new one."""
     format: str = "text"
     """`text`, or `markdown`: the server turns the body into HTML (see formatting.py)."""
+    attachments: list = field(default_factory=list)
+    """Files read from the user's computer (outgoing_files.OutgoingFile), checked and held in memory."""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -97,11 +99,13 @@ class Outgoing:
             "reply_to_message_id": self.reply_to_id,
             "forward_message_id": self.forward_id,
             "format": self.format,
+            "attachments": [a.to_dict() for a in self.attachments],
         }
 
     def fingerprint(self) -> tuple:
         norm = lambda xs: tuple(sorted(x.lower() for x in xs))  # noqa: E731
-        return (norm(self.to), norm(self.cc), norm(self.bcc), self.subject.strip(), self.body.strip(), self.reply_to_id, self.forward_id, self.format)
+        return (norm(self.to), norm(self.cc), norm(self.bcc), self.subject.strip(), self.body.strip(), self.reply_to_id, self.forward_id, self.format,
+                tuple((a.name, a.sha256) for a in self.attachments))
 
 
 @dataclass

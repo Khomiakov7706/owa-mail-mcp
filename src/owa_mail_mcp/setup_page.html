@@ -89,6 +89,13 @@ label.plain { margin: 0; font-weight: 400; }
 .strong { font-weight: 600; }
 pre.plain-text { color: var(--text); }
 footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 24px; word-break: break-all; }
+.update { border: 1px solid var(--line); border-left: 4px solid var(--accent, #0b62d6); border-radius: 10px; padding: 10px 14px; margin: 0 0 16px; background: var(--card, transparent); font-size: 14px; }
+.update h3 { margin: 0 0 6px; font-size: 15px; }
+.update ul { margin: 4px 0 8px; padding-left: 20px; }
+.update .rel { margin-top: 6px; }
+.update .rel b { font-size: 13px; }
+.update code { display: block; font-size: 12px; padding: 6px 8px; margin: 6px 0; background: var(--bg); border-radius: 6px; word-break: break-all; user-select: all; }
+.update .muted { color: var(--muted); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -101,6 +108,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 2
       <span class="badge no" id="badge">{{t:setup.badge_no}}</span>
     </div>
   </header>
+  <div class="update" id="update" hidden></div>
 
   <section class="card">
     <h2>{{t:setup.s1_title}}</h2>
@@ -260,10 +268,36 @@ function renderRules() {
         el("button", { type: "button", class: "small", onclick: () => { rules.splice(i, 1); renderRules(); saveAccessSoon(); } }, T("remove_rule"))),
       el("label", {}, T("rule_agent")), input("agent", { list: "agents", placeholder: "OpenCode" }),
       el("label", {}, T("rule_recipients"), " ", el("span", { class: "hint" }, T("trusted_note"))),
-      input("recipients", { placeholder: "anna.smirnova@company.com" }, true),
-      el("label", {}, T("rule_subject"), " ", el("span", { class: "hint" }, T("rule_subject_note"))),
-      input("subject", { placeholder: T("rule_subject_example") }));
+      input("recipients", { placeholder: "anna.smirnova@company.com" }, true));
   }));
+}
+
+// A newer version and what changed in it, or a reminder to restart the agent. The notes come from the project's
+// release list; they are put on the page as text, never as HTML.
+let lastUpdate = "";
+function renderUpdate(u) {
+  const box = document.getElementById("update");
+  const sig = JSON.stringify(u || {});
+  if (!box || sig === lastUpdate) return;
+  lastUpdate = sig;
+  if (!u || (!u.update_available && !u.restart_needed)) { box.hidden = true; box.replaceChildren(); return; }
+  const parts = [];
+  if (u.update_available) {
+    parts.push(el("h3", {}, I18N["update.title"].replace("{latest}", u.latest).replace("{current}", u.current)));
+    for (const r of u.notes || []) {
+      parts.push(el("div", { class: "rel" }, el("b", {}, r.version + (r.date ? " · " + r.date : "")),
+        el("ul", {}, (r.items || []).map(x => el("li", {}, x)))));
+    }
+    const cmd = el("code", {}, u.install_command);
+    const copy = el("button", { class: "small", onclick: async () => {
+      try { await navigator.clipboard.writeText(u.install_command); copy.textContent = I18N["update.copied"]; } catch (e) { /* select by hand */ }
+    } }, I18N["update.copy"]);
+    parts.push(el("div", { class: "muted" }, I18N["update.how"]), cmd, copy, el("div", { class: "muted" }, I18N["update.after"]));
+  } else {
+    parts.push(el("h3", {}, I18N["update.restart_title"]), el("div", { class: "muted" }, I18N["update.restart_text"]));
+  }
+  box.replaceChildren(...parts);
+  box.hidden = false;
 }
 
 function fillForm(s) {
@@ -291,6 +325,7 @@ function fillLanguages(s) {
 }
 
 function render(s) {
+  renderUpdate(s.update);
   state = s;
   const badge = $("badge");
   badge.textContent = s.configured ? T("badge_ok") : T("badge_no");
@@ -449,7 +484,7 @@ $("calendar-enabled").addEventListener("change", () => { $("calendar-options").c
 $("confirm-window").addEventListener("change", saveAccessSoon);
 $("confirm-chat").addEventListener("change", saveAccessSoon);
 $("trusted").addEventListener("input", saveAccessSoon);
-$("add-rule").addEventListener("click", () => { rules.push({ agent: "", recipients: "", subject: "" }); renderRules(); });
+$("add-rule").addEventListener("click", () => { rules.push({ agent: "", recipients: "" }); renderRules(); });
 $("lang").addEventListener("change", async () => { await api("api/language", { language: $("lang").value }); location.reload(); });
 $("domains").addEventListener("input", saveAccessSoon);
 $("timeout").addEventListener("input", saveAccessSoon);

@@ -24,7 +24,7 @@ class ConfirmationUI:
         self._open_browser = open_browser
         self._lock = threading.Lock()
         self._app = LocalWebApp(lambda: render_page("confirm_page.html", current_language()), host=host, port=port)
-        self._app.get("api/pending", lambda: (200, {"items": broker.snapshot()}))
+        self._app.get("api/pending", lambda: (200, {"items": broker.snapshot(), "update": _update_status()}))
         self._app.post("api/decide", self._decide)
         self._app.post("api/hold", self._hold)
 
@@ -80,6 +80,13 @@ class ConfirmationUI:
         return 200, {"ok": True}
 
 
+def _update_status() -> dict[str, Any]:
+    from .runtime import code_updated_since_start
+    from .updates import status
+
+    return status(current_language(), restart_needed=code_updated_since_start())
+
+
 def _is_email(broker: ConfirmationBroker, proposal_id: str) -> bool:
     try:
         return broker.get(proposal_id).message is not None
@@ -105,4 +112,13 @@ def _edited_message(broker: ConfirmationBroker, proposal_id: str, edits: dict[st
         reply_to_id=current.reply_to_id,
         forward_id=current.forward_id,
         format=current.format,
+        attachments=_kept(current.attachments, edits.get("attachments")),
     )
+
+
+def _kept(files: list, names: Any) -> list:
+    """The user can only take attachments off in the window, never add one: `names` are the ones they kept."""
+    if not isinstance(names, list):
+        return list(files)
+    keep = {str(n) for n in names}
+    return [f for f in files if f.name in keep]

@@ -69,8 +69,8 @@ class Settings:
     trusted_recipients: tuple[str, ...] = ()
     """Addresses the user agreed to: an email whose every recipient is here goes out without the confirmation window."""
     trusted_rules: tuple[dict, ...] = ()
-    """Narrower permissions: {"agent": client name, "recipients": [...], "subject": text the subject must contain or ""}.
-    An email from that agent whose every recipient is in the rule (and whose subject fits) skips the window."""
+    """Narrower permissions: {"agent": MCP client name, "recipients": [...]}. An email from that agent whose every
+    recipient is in the rule skips the window."""
     trusted_per_hour: int = 20
     """At most this many emails an hour skip the window; beyond it they wait for the user again."""
     confirm_timeout: int = 50
@@ -178,7 +178,7 @@ def normalize_rules(raw: Any) -> tuple[dict, ...]:
         agent = " ".join(str(rule.get("agent") or "").split())[:80]
         recipients = [str(x).strip() for x in rule.get("recipients") or [] if str(x).strip()]
         if agent and recipients:
-            out.append({"agent": agent, "recipients": recipients, "subject": " ".join(str(rule.get("subject") or "").split())[:200]})
+            out.append({"agent": agent, "recipients": recipients})
     return tuple(out)
 
 

@@ -88,6 +88,9 @@ def check_outgoing(message: Outgoing, *, my_email: str | None, internal_domains:
         review.warnings.append(Coded("The text contains invisible characters (zero-width spaces or similar).", "invisible"))
     if message.bcc:
         review.warnings.append(Coded("There are hidden copies (Bcc).", "bcc"))
+    if message.attachments and review.external:
+        review.warnings.append(Coded(f"Files go to people outside the organization: {len(message.attachments)}.", "files_external",
+                                     n=len(message.attachments)))
     if message.format == "markdown":
         from .formatting import misleading_links
 

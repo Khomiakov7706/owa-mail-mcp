@@ -1,4 +1,4 @@
-"""Pausing the countdown, and trusted-recipient rules for one agent and one kind of email."""
+"""Pausing the countdown, and trusted-recipient rules for one agent."""
 
 import threading
 import time
@@ -17,7 +17,7 @@ from owa_mail_mcp.setup import parse_rules
 from test_server import _request, answer
 
 pytestmark = pytest.mark.anyio
-REPORT = {"agent": "OpenCode", "recipients": ["oleg.kuznetsov@example.com", "anna.smirnova@example.com"], "subject": "Еженедельный отчёт"}
+REPORT = {"agent": "OpenCode", "recipients": ["oleg.kuznetsov@example.com", "anna.smirnova@example.com"]}
 
 
 class Clock:
@@ -84,20 +84,19 @@ def _msg(to, subject="Еженедельный отчёт: неделя 46"):
     return Outgoing(to=to, subject=subject, body="Отчёт")
 
 
-def test_rule_covers_only_its_agent_recipients_and_subject():
+def test_rule_covers_only_its_agent_and_recipients():
     s = Settings(trusted_rules=normalize_rules([REPORT]), trusted_recipients=("maria.ivanova@example.com",))
-    assert matching_rule(s, _msg(["oleg.kuznetsov@example.com"]), "OpenCode") == {"agent": "OpenCode", "subject": "Еженедельный отчёт"}
+    assert matching_rule(s, _msg(["oleg.kuznetsov@example.com"]), "OpenCode") == {"agent": "OpenCode"}
     assert matching_rule(s, _msg(["oleg.kuznetsov@example.com"]), "opencode") is not None  # names compare case-insensitively
     assert matching_rule(s, _msg(["oleg.kuznetsov@example.com"]), "Cursor") is None
-    assert matching_rule(s, _msg(["oleg.kuznetsov@example.com"], "Привет"), "OpenCode") is None
+    assert matching_rule(s, _msg(["oleg.kuznetsov@example.com"], "Привет"), "OpenCode") is not None  # any subject
     assert matching_rule(s, _msg(["oleg.kuznetsov@example.com", "john.doe@partner.org"]), "OpenCode") is None
-    assert matching_rule(s, _msg(["maria.ivanova@example.com"], "Что угодно"), "Cursor") == {"agent": "any", "subject": ""}
+    assert matching_rule(s, _msg(["maria.ivanova@example.com"], "Что угодно"), "Cursor") == {"agent": "any"}
 
 
 def test_setup_checks_rules():
-    rules, error = parse_rules([{"agent": " OpenCode ", "recipients": "oleg@corp.ru\nanna@corp.ru", "subject": " Отчёт "},
-                                {"agent": "", "recipients": "", "subject": ""}])
-    assert error is None and rules == ({"agent": "OpenCode", "recipients": ["oleg@corp.ru", "anna@corp.ru"], "subject": "Отчёт"},)
+    rules, error = parse_rules([{"agent": " OpenCode ", "recipients": "oleg@corp.ru\nanna@corp.ru"}, {"agent": "", "recipients": ""}])
+    assert error is None and rules == ({"agent": "OpenCode", "recipients": ["oleg@corp.ru", "anna@corp.ru"]},)
     assert "1" in parse_rules([{"agent": "", "recipients": "a@b.ru"}])[1]
     assert parse_rules([{"agent": "X", "recipients": "олег"}])[1]
     assert parse_rules(None) == (None, None)
@@ -111,17 +110,18 @@ async def test_report_goes_out_without_the_window_only_from_that_agent(make_serv
         ok = await c.call_tool("send_email", {"to": ["oleg.kuznetsov@example.com"], "subject": "Еженедельный отчёт: неделя 46",
                                               "body": "Сделано: …"})
         t = answer(tools, "reject", seen=seen)
-        other_topic = await c.call_tool("send_email", {"to": ["oleg.kuznetsov@example.com"], "subject": "Обед?", "body": "Пойдём?"})
+        outsider = await c.call_tool("send_email", {"to": ["oleg.kuznetsov@example.com", "maria.ivanova@example.com"],
+                                                    "subject": "Обед?", "body": "Пойдём?"})
         t.join()
     async with Client(mcp, client_info=Implementation(name="Cursor", version="1")) as c:
         t = answer(tools, "reject")
         other_agent = await c.call_tool("send_email", {"to": ["oleg.kuznetsov@example.com"], "subject": "Еженедельный отчёт: неделя 47",
                                                        "body": "Сделано: …"})
         t.join()
-    assert status["trusted_rules_for_you"] == [{"recipients": REPORT["recipients"], "subject_must_contain": "Еженедельный отчёт"}]
+    assert status["trusted_rules_for_you"] == [{"recipients": REPORT["recipients"]}]
     assert ok.structured_content["confirmed"] == "trusted_recipients"
-    assert ok.structured_content["trusted_rule"] == {"agent": "OpenCode", "subject": "Еженедельный отчёт"}
-    assert other_topic.is_error and seen  # went to the window
+    assert ok.structured_content["trusted_rule"] == {"agent": "OpenCode"}
+    assert outsider.is_error and seen  # a recipient outside the rule: the window
     assert other_agent.is_error
     history = [i for i in tools.broker.snapshot() if i["auto"]]
     assert history[0]["rule"]["agent"] == "OpenCode"

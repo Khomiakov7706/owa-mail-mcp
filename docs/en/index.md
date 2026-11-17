@@ -41,7 +41,7 @@ The agent installs the program, connects it to itself, asks for your web mail ad
 ## Setup (the `owa-mail-mcp setup` window)
 
 1. **Mailbox.** Web mail address (`mail.company.com`, `https://owa.company.com` or `https://outlook.company.com/owa`), email, login (`DOMAIN\login` if your company uses Windows sign-in), password. Test connection shows your name, unread count and latest messages; then Save. The password is stored in the system keychain.
-2. **What the agent may do.** Read-only by default. "Allow sending email" turns on `send_email`, the Calendar block sets whether the assistant sees the calendar and may create, move and cancel meetings (`create_meeting`, `cancel_meeting`, `reschedule_meeting`), confirmed in the window or in the chat with the agent, "Allow organizing mail" turns on drafts, flags, categories, folders and Deleted Items (no window: all reversible). Every message and every meeting change is confirmed in the window; only emails to recipients on the trusted list you set there, and emails under "Rules for agents" (from one agent, to these recipients, with given words in the subject, say a weekly report) go out without it (at most 20 an hour). The countdown in the confirmation window can be paused.
+2. **What the agent may do.** Read-only by default. "Allow sending email" turns on `send_email`, the Calendar block sets whether the assistant sees the calendar and may create, move and cancel meetings (`create_meeting`, `cancel_meeting`, `reschedule_meeting`), confirmed in the window or in the chat with the agent, "Allow organizing mail" turns on drafts, flags, categories, folders and Deleted Items (no window: all reversible). Every message and every meeting change is confirmed in the window; only emails to recipients on the trusted list you set there, and emails under "Rules for agents" (from one agent to these recipients, say a weekly report) go out without it (at most 20 an hour). The countdown in the confirmation window can be paused.
 3. **Connect to your agent.** An Add button for Claude Code, Codex, Claude Desktop, Cursor, or lines to copy.
 
 The windows follow the system language (English, Русский, 中文, Español); switch it in the top-right corner of the setup window or with `OWA_MAIL_LANG`.
@@ -130,7 +130,7 @@ After updating the program, restart the MCP server in your client: in Claude Cod
 | `get_attachment` | Attachment text: .docx, .pdf, .txt, .md, .csv, .html, .vtt/.srt, attached emails |
 | `find_people` | Organization address book: name, address, title, department |
 | `list_senders` | Who wrote in a period: message count, unread, latest subject |
-| `send_email` | A new message or a reply — only after the user confirms in the window (off by default). `format: "markdown"` for bold, lists, links; the server builds the HTML |
+| `send_email` | A new message or a reply — only after the user confirms in the window (off by default). `format: "markdown"` for bold, lists, links; the server builds the HTML. `attachments`: PDF, images, Office files, CSV, text |
 | `forward_email` | Forward a message with its attachments — after the user confirms in the window, like sending |
 | `create_draft` | Save a message, reply or forward to Drafts; the user sends it themselves |
 | `list_folders` | Mailbox folders with message and unread counts |

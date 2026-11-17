@@ -51,6 +51,11 @@ label { display: block; font-size: 13px; color: var(--muted); margin-top: 10px; 
 input, textarea { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 4px; }
 textarea { min-height: 220px; resize: vertical; }
 textarea.short { min-height: 110px; }
+.files .file { padding: 2px 0; }
+.files .fname { font-weight: 600; }
+.files .fpath { color: var(--muted); font-size: 12px; word-break: break-all; }
+label.file.plain { display: block; color: var(--text); font-size: 14px; margin-top: 4px; }
+label.file input { width: auto; margin: 0 4px 0 0; }
 div.rich { white-space: normal; word-break: break-word; background: var(--bg); border-radius: 8px; padding: 12px; margin: 10px 0 0; max-height: 50vh; overflow: auto; }
 .rich p, .rich ul, .rich ol { margin: 0 0 10px; }
 .rich h3, .rich h4, .rich h5 { margin: 4px 0 8px; }
@@ -67,6 +72,13 @@ h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: upp
 .old { text-decoration: line-through; color: var(--muted); }
 .new { font-weight: 600; color: var(--ok); }
 .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.update { border: 1px solid var(--line); border-left: 4px solid var(--accent, #0b62d6); border-radius: 10px; padding: 10px 14px; margin: 0 0 16px; background: var(--card, transparent); font-size: 14px; }
+.update h3 { margin: 0 0 6px; font-size: 15px; }
+.update ul { margin: 4px 0 8px; padding-left: 20px; }
+.update .rel { margin-top: 6px; }
+.update .rel b { font-size: 13px; }
+.update code { display: block; font-size: 12px; padding: 6px 8px; margin: 6px 0; background: var(--bg); border-radius: 6px; word-break: break-all; user-select: all; }
+.update .muted { color: var(--muted); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -78,6 +90,7 @@ h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: upp
       <div class="sub">{{t:confirm.sub}}</div>
     </div>
   </header>
+  <div class="update" id="update" hidden></div>
   <section id="pending"></section>
   <h2 id="history-title" hidden>{{t:confirm.history}}</h2>
   <section id="history"></section>
@@ -110,6 +123,13 @@ function rich(htmlText) {
   const box = el("div", { class: "body rich" });
   box.innerHTML = htmlText;
   return box;
+}
+
+const size = (n) => n < 1024 ? n + " B" : n < 1048576 ? (n / 1024).toFixed(0) + " KB" : (n / 1048576).toFixed(1) + " MB";
+// Attached files: name and size, and the folder each comes from, so a file from an unexpected place stands out.
+function fileList(files) {
+  return el("div", { class: "files" }, files.map(f => el("div", { class: "file" },
+    el("span", { class: "fname" }, f.name), " · ", size(f.size), el("div", { class: "fpath" }, f.path))));
 }
 
 function chips(list, external) {
@@ -240,6 +260,16 @@ function pendingCard(item) {
       f[key] = input;
       return [el("label", {}, label), input];
     };
+    const files = m.attachments || [];
+    if (files.length) {
+      draft.attachments = draft.attachments || files.map(f => f.name);
+      card.append(el("label", {}, T("files")), el("div", { class: "files" }, files.map(f => {
+        const box = el("input", { type: "checkbox" });
+        box.checked = draft.attachments.includes(f.name);
+        box.addEventListener("change", () => { draft.attachments = files.map(x => x.name).filter(n => n === f.name ? box.checked : draft.attachments.includes(n)); });
+        return el("label", { class: "file plain" }, box, " ", el("span", { class: "fname" }, f.name), " · ", size(f.size));
+      })));
+    }
     card.append(...field("to", T("field_to")), ...field("cc", T("field_cc")), ...field("bcc", T("field_bcc")),
                 ...field("subject", T("field_subject")), ...field("body", T(m.format === "markdown" ? "field_body_markdown" : "field_body"), true));
     card.append(el("div", { class: "actions" },
@@ -253,6 +283,7 @@ function pendingCard(item) {
       m.cc.length ? el("div", { class: "row" }, el("div", { class: "k" }, T("cc")), chips(m.cc, item.external)) : null,
       m.bcc.length ? el("div", { class: "row" }, el("div", { class: "k" }, T("bcc")), chips(m.bcc, item.external)) : null,
       el("div", { class: "row" }, el("div", { class: "k" }, T("subject")), el("div", { class: "subject" }, m.subject)),
+      (m.attachments || []).length ? el("div", { class: "row" }, el("div", { class: "k" }, T("files")), fileList(m.attachments)) : null,
       item.reply_context && item.reply_context.forward && item.reply_context.attachments.length
         ? el("div", { class: "row" }, el("div", { class: "k" }, T("attachments")), el("div", {}, item.reply_context.attachments.join(", "))) : null,
       item.body_html ? rich(item.body_html) : m.body ? el("pre", { class: "body" }, m.body) : null));
@@ -269,7 +300,7 @@ function pendingCard(item) {
 }
 
 const byRule = (rule) => !rule || rule.agent === "any" ? ""
-  : " · " + (rule.subject ? T("by_rule_subject", { agent: rule.agent, subject: rule.subject }) : T("by_rule", { agent: rule.agent }));
+  : " · " + T("by_rule", { agent: rule.agent });
 
 function historyRow(item) {
   if (item.action) {
@@ -282,7 +313,8 @@ function historyRow(item) {
   }
   const m = item.message;
   return el("div", { class: "card done" },
-    el("div", { class: "ell" }, el("span", { class: "subject" }, m.subject), " → ", m.to.join(", "), item.edited ? T("edited_suffix") : ""),
+    el("div", { class: "ell" }, el("span", { class: "subject" }, m.subject), " → ", m.to.join(", "),
+      (m.attachments || []).length ? " · " + T("files_n", { n: m.attachments.length }) : "", item.edited ? T("edited_suffix") : ""),
     el("div", { class: "s " + item.status }, (item.auto && item.status === "sent" ? T("status_sent_auto") + byRule(item.rule) : I18N["confirm.status_" + item.status] || item.status), item.error ? `: ${item.error}` : ""));
 }
 
@@ -312,6 +344,34 @@ function stopEditing(id) {
   editing.delete(id);
   if (autoPaused.delete(id)) hold(id, false);
   render(window.__items || [], true);
+}
+
+// A newer version and what changed in it, or a reminder to restart the agent. The notes come from the project's
+// release list; they are put on the page as text, never as HTML.
+let lastUpdate = "";
+function renderUpdate(u) {
+  const box = document.getElementById("update");
+  const sig = JSON.stringify(u || {});
+  if (!box || sig === lastUpdate) return;
+  lastUpdate = sig;
+  if (!u || (!u.update_available && !u.restart_needed)) { box.hidden = true; box.replaceChildren(); return; }
+  const parts = [];
+  if (u.update_available) {
+    parts.push(el("h3", {}, I18N["update.title"].replace("{latest}", u.latest).replace("{current}", u.current)));
+    // Here the message waiting for an answer comes first: the notes stay folded.
+    const notes = (u.notes || []).map(r => el("div", { class: "rel" }, el("b", {}, r.version + (r.date ? " · " + r.date : "")),
+      el("ul", {}, (r.items || []).map(x => el("li", {}, x)))));
+    if (notes.length) parts.push(el("details", {}, el("summary", {}, I18N["update.whats_new"]), ...notes));
+    const cmd = el("code", {}, u.install_command);
+    const copy = el("button", { class: "small", onclick: async () => {
+      try { await navigator.clipboard.writeText(u.install_command); copy.textContent = I18N["update.copied"]; } catch (e) { /* select by hand */ }
+    } }, I18N["update.copy"]);
+    parts.push(el("div", { class: "muted" }, I18N["update.how"]), cmd, copy, el("div", { class: "muted" }, I18N["update.after"]));
+  } else {
+    parts.push(el("h3", {}, I18N["update.restart_title"]), el("div", { class: "muted" }, I18N["update.restart_text"]));
+  }
+  box.replaceChildren(...parts);
+  box.hidden = false;
 }
 
 let lastSignature = "";
@@ -347,6 +407,7 @@ async function refresh(force) {
     const data = await res.json();
     document.getElementById("dot").classList.remove("off");
     render(data.items, force);
+    renderUpdate(data.update);
   } catch (e) {
     document.getElementById("dot").classList.add("off");
   }
