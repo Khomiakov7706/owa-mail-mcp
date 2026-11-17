@@ -462,6 +462,8 @@ owa-mail-mcp setup</pre><button class="copy" type="button" data-copy="#c-win">�
         <p>EWS 地址前面有一个带网页登录的网关。程序会先通过 OWA 登录，再在同一连接上继续，通常这样就够了。如果仍然不行，在设置窗口中点击“复制诊断信息”（不含密码），发给 IT 部门或提交到 issues。</p></details>
       <details><summary>登录名和密码存在哪里？更新后还在吗？</summary>
         <p>密码在系统钥匙串中，其余信息在用户目录下的 <code>config.json</code> 中（Mac 上为 <code>~/Library/Application Support/owa-mail-mcp</code>）。更新不会改动它们。查看：<code>owa-mail-mcp status</code>。</p></details>
+      <details><summary>如何再次打开设置窗口？</summary>
+        <p>在终端运行 <code>owa-mail-mcp setup</code>，窗口会在浏览器中打开，并显示已保存的设置。可以在其中更改密码、权限或连接其他客户端。无需重启客户端：服务器会自动应用更改。如果浏览器没有打开，<code>owa-mail-mcp setup --no-browser</code> 会输出窗口地址。</p></details>
       <details><summary>更新后错误依旧</summary>
         <p>客户端仍在运行旧代码的进程。请重启 MCP 服务器：Claude Code 中为 <code>/mcp</code> → owa-mail → Reconnect；Claude Desktop 和 Cursor 需关闭后重新打开应用。</p></details>
       <details><summary>怎么确认一切正常？</summary>

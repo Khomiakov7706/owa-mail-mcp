@@ -462,6 +462,8 @@ No me pidas la contraseña: la escribiré yo en la ventana de configuración.</p
         <p>En la dirección de EWS hay una pasarela con inicio de sesión web. El programa primero inicia sesión a través de OWA y continúa en la misma conexión; normalmente basta con eso. Si no, usa «Copiar diagnóstico» en la ventana de configuración (sin contraseñas) y envíalo a tu equipo de TI o a issues.</p></details>
       <details><summary>¿Dónde se guardan el usuario y la contraseña? ¿Se conservan al actualizar?</summary>
         <p>La contraseña, en el llavero del sistema; lo demás, en <code>config.json</code> en la carpeta del usuario (en Mac, <code>~/Library/Application Support/owa-mail-mcp</code>). Las actualizaciones no los tocan. Para comprobarlo: <code>owa-mail-mcp status</code>.</p></details>
+      <details><summary>¿Cómo vuelvo a abrir la ventana de configuración?</summary>
+        <p>En una terminal: <code>owa-mail-mcp setup</code>; la ventana se abre en el navegador con la configuración guardada. Ahí puede cambiar la contraseña o los permisos, o conectar otro cliente. No hace falta reiniciar el cliente: el servidor aplica los cambios solo. Si el navegador no se abre, <code>owa-mail-mcp setup --no-browser</code> muestra la dirección de la ventana.</p></details>
       <details><summary>Tras actualizar, siguen los mismos errores</summary>
         <p>El cliente mantiene en ejecución un proceso con el código antiguo. Reinicia el servidor MCP: en Claude Code, <code>/mcp</code> → owa-mail → Reconnect; en Claude Desktop y Cursor, cierra y vuelve a abrir la aplicación.</p></details>
       <details><summary>¿Cómo sé que todo funciona?</summary>
