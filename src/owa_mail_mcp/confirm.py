@@ -50,6 +50,10 @@ class Proposal:
     """A calendar change: `kind` (cancel, decline, delete, reschedule), the `event`, and `new_start`/`new_end` or `note`."""
     auto: bool = False
     """Sent without asking: every recipient is on the user's trusted list."""
+    rule: dict[str, Any] | None = None
+    """For a message sent without asking: the user's permission it went under (agent and subject words)."""
+    paused_left: float | None = None
+    """Seconds that were left when the user paused the countdown; None while it runs."""
     via: str = "window"
     """Where the user said yes: `window`, `trusted` (no question asked) or `chat` (the MCP client asked them)."""
 
@@ -63,13 +67,16 @@ class Proposal:
             "body_html": _preview(self.message),
             "action": self.action,
             "auto": self.auto,
+            "rule": self.rule,
             "via": self.via,
             "external": self.review.external,
             "warnings": self.review.warnings,
             "warning_codes": [getattr(w, "code", "") for w in self.review.warnings],
             "warning_params": [getattr(w, "params", {}) for w in self.review.warnings],
             "reply_context": self.reply_context,
-            "seconds_left": max(0, int(self.deadline - now)) if self.status == Status.PENDING else 0,
+            "seconds_left": (int(self.paused_left) if self.paused_left is not None else max(0, int(self.deadline - now)))
+                            if self.status == Status.PENDING else 0,
+            "paused": self.paused_left is not None and self.status == Status.PENDING,
             "edited": self.edited,
             "error": self.error,
         }
@@ -82,6 +89,10 @@ def _preview(message: Outgoing | None) -> str | None:
     from .formatting import to_html
 
     return to_html(message.body, preview=True)
+
+
+PAUSE_LIMIT = 30 * 60
+"""A paused question still ends after this long, so a forgotten window does not hold the agent forever."""
 
 
 class BrokerBusy(Exception):
@@ -128,14 +139,14 @@ class ConfirmationBroker:
             return proposal
 
     def record_trusted(self, message: Outgoing | None, review: OutgoingReview, *, client: str, sender: str, reply_context=None,
-                       action: dict[str, Any] | None = None, via: str = "trusted") -> Proposal:
+                       action: dict[str, Any] | None = None, via: str = "trusted", rule: dict[str, Any] | None = None) -> Proposal:
         """Approved elsewhere (trusted recipients, or the user answered in the chat): listed in the window's history."""
         with self._cond:
             now = self._clock()
             proposal = Proposal(
                 id=secrets.token_urlsafe(9), message=message, review=review, client=client, sender=sender, created=now,
                 deadline=now, reply_context=reply_context, status=Status.APPROVED, finished=now, auto=via == "trusted",
-                action=action, via=via,
+                action=action, via=via, rule=rule,
             )
             self._items[proposal.id] = proposal
             self._order.append(proposal.id)
@@ -172,6 +183,25 @@ class ConfirmationBroker:
         self._finish(proposal_id, Status.FAILED, only_from=(Status.APPROVED,), error=error)
 
     # --- window side -------------------------------------------------------------------------
+
+    def hold(self, proposal_id: str, paused: bool) -> str | None:
+        """Pauses or resumes the countdown of a waiting question. Returns an error to show, or None."""
+        with self._cond:
+            self._expire_due()
+            proposal = self._items.get(proposal_id)
+            if proposal is None:
+                return Coded("This message is no longer waiting.", "gone")
+            if proposal.status != Status.PENDING:
+                return Coded(f"Already {proposal.status.value}.", "already")
+            now = self._clock()
+            if paused and proposal.paused_left is None:
+                proposal.paused_left = max(1.0, proposal.deadline - now)
+                proposal.deadline = now + PAUSE_LIMIT
+            elif not paused and proposal.paused_left is not None:
+                proposal.deadline = now + proposal.paused_left
+                proposal.paused_left = None
+            self._cond.notify_all()
+            return None
 
     def decide(self, proposal_id: str, approve: bool, edited: Outgoing | None = None,
                action_edits: dict[str, Any] | None = None) -> str | None:

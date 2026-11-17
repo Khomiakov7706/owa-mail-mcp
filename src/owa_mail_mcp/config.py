@@ -68,6 +68,9 @@ class Settings:
     """Drafts, read/unread, flags, categories, moving to folders and to Deleted Items: reversible, no confirmation window."""
     trusted_recipients: tuple[str, ...] = ()
     """Addresses the user agreed to: an email whose every recipient is here goes out without the confirmation window."""
+    trusted_rules: tuple[dict, ...] = ()
+    """Narrower permissions: {"agent": client name, "recipients": [...], "subject": text the subject must contain or ""}.
+    An email from that agent whose every recipient is in the rule (and whose subject fits) skips the window."""
     trusted_per_hour: int = 20
     """At most this many emails an hour skip the window; beyond it they wait for the user again."""
     confirm_timeout: int = 50
@@ -122,6 +125,8 @@ class Settings:
             for name in ("internal_domains", "legacy_tls", "trusted_recipients"):
                 if name in values:
                     values[name] = tuple(values[name] or ())
+            if "trusted_rules" in values:
+                values["trusted_rules"] = normalize_rules(values["trusted_rules"])
             _migrate_legacy_password(values.get("username") or values.get("email"), values.get("server"))
         values.update(_env_overrides())
         settings = cls(**values)
@@ -164,6 +169,19 @@ def _env_overrides() -> dict[str, Any]:
     return out
 
 
+def normalize_rules(raw: Any) -> tuple[dict, ...]:
+    """Trusted-recipient rules in their one shape; anything malformed is dropped."""
+    out = []
+    for rule in raw if isinstance(raw, (list, tuple)) else ():
+        if not isinstance(rule, dict):
+            continue
+        agent = " ".join(str(rule.get("agent") or "").split())[:80]
+        recipients = [str(x).strip() for x in rule.get("recipients") or [] if str(x).strip()]
+        if agent and recipients:
+            out.append({"agent": agent, "recipients": recipients, "subject": " ".join(str(rule.get("subject") or "").split())[:200]})
+    return tuple(out)
+
+
 def save_settings(settings: Settings) -> Path:
     """Writes everything except the password, readable by the user only."""
     data = asdict(settings)
@@ -173,6 +191,7 @@ def save_settings(settings: Settings) -> Path:
     data["internal_domains"] = list(settings.internal_domains)
     data["legacy_tls"] = list(settings.legacy_tls)
     data["trusted_recipients"] = list(settings.trusted_recipients)
+    data["trusted_rules"] = [dict(r) for r in settings.trusted_rules]
     key = _signing_key()
     if key:
         data["signature"] = _sign(data, key)
@@ -194,7 +213,7 @@ def save_settings(settings: Settings) -> Path:
 
 _GUARDED = {
     "allow_send", "allow_calendar", "allow_organize", "calendar_enabled", "calendar_confirm", "trusted_recipients",
-    "trusted_per_hour", "internal_domains", "max_recipients", "requests_per_minute", "confirm_timeout",
+    "trusted_rules", "trusted_per_hour", "internal_domains", "max_recipients", "requests_per_minute", "confirm_timeout",
     "trusted_certificates", "legacy_tls", "proxy",
 }
 """What a file changed behind the window's back must not decide: these fall back to their safe defaults."""

@@ -31,6 +31,8 @@ header .sub { color: var(--muted); font-size: 13px; }
 .who { font-weight: 600; }
 .timer { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .timer.low { color: var(--danger); font-weight: 600; }
+.clock { display: inline-flex; align-items: center; gap: 6px; }
+button.pause { padding: 2px 8px; font-size: 12px; line-height: 1.4; min-width: 0; }
 .row { display: grid; grid-template-columns: 112px 1fr; gap: 8px; padding: 4px 0; align-items: start; }
 .row .k { color: var(--muted); font-size: 13px; padding-top: 3px; overflow-wrap: anywhere; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -173,7 +175,7 @@ function meetingEditor(item, draft) {
 
 function actionCard(item) {
   const a = item.action, ev = a.event;
-  const timer = el("span", { class: "timer" + (item.seconds_left <= 10 ? " low" : ""), "data-id": item.id }, T("seconds", { n: item.seconds_left }));
+  const timer = clock(item);
   const people = emails(ev.attendees), optional = emails(ev.optional_attendees);
   const head = el("div", { class: "top" }, el("div", { class: "who" }, T("asks_" + a.kind, { client: item.client || T("mcp_client") })), timer);
   const draft = editing.get(item.id);
@@ -181,7 +183,7 @@ function actionCard(item) {
     const card = el("div", { class: "card pending" }, head, ...meetingEditor(item, draft));
     card.append(el("div", { class: "actions" },
       approveButton(item.id, T("do_" + a.kind), () => decide(item.id, "approve", draft)),
-      el("button", { onclick: () => { editing.delete(item.id); render(window.__items || [], true); } }, T("cancel_edits")),
+      el("button", { onclick: () => stopEditing(item.id) }, T("cancel_edits")),
       el("button", { onclick: () => decide(item.id, "reject") }, T("dont_change"))));
     if (errors.has(item.id)) card.append(el("div", { class: "err" }, errors.get(item.id)));
     return card;
@@ -206,11 +208,10 @@ function actionCard(item) {
   ];
   if (notes.length) card.append(el("div", { class: "warn" }, el("ul", {}, notes.map(w => el("li", {}, w)))));
   const startEdit = () => {
-    editing.set(item.id, a.kind === "reschedule"
+    startEditing(item, a.kind === "reschedule"
       ? { new_start: localInput(a.new_start), new_end: localInput(a.new_end) }
       : { subject: ev.subject, start: localInput(ev.start), end: localInput(ev.end), location: ev.location || "",
           attendees: people.join(", "), optional_attendees: optional.join(", "), note: a.note || "" });
-    render(window.__items || [], true);
   };
   card.append(el("div", { class: "actions" },
     approveButton(item.id, T("do_" + a.kind), () => decide(item.id, "approve")),
@@ -224,7 +225,7 @@ function pendingCard(item) {
   if (item.action) return actionCard(item);
   const m = item.message;
   const draft = editing.get(item.id);
-  const timer = el("span", { class: "timer" + (item.seconds_left <= 10 ? " low" : ""), "data-id": item.id }, T("seconds", { n: item.seconds_left }));
+  const timer = clock(item);
   const card = el("div", { class: "card pending" },
     el("div", { class: "top" },
       el("div", { class: "who" }, T("asks", { client: item.client || T("mcp_client") })), timer),
@@ -243,7 +244,7 @@ function pendingCard(item) {
                 ...field("subject", T("field_subject")), ...field("body", T(m.format === "markdown" ? "field_body_markdown" : "field_body"), true));
     card.append(el("div", { class: "actions" },
       approveButton(item.id, T("send_edited"), () => decide(item.id, "approve", draft)),
-      el("button", { onclick: () => { editing.delete(item.id); render(window.__items || [], true); } }, T("cancel_edits")),
+      el("button", { onclick: () => stopEditing(item.id) }, T("cancel_edits")),
       el("button", { onclick: () => decide(item.id, "reject") }, T("dont_send"))));
   } else {
     card.append(el("div", {},
@@ -260,12 +261,15 @@ function pendingCard(item) {
     if (warnings.length) card.append(el("div", { class: "warn" }, el("ul", {}, warnings.map(w => el("li", {}, w)))));
     card.append(el("div", { class: "actions" },
       approveButton(item.id, T("send"), () => decide(item.id, "approve")),
-      el("button", { onclick: () => { editing.set(item.id, { to: m.to.join(", "), cc: m.cc.join(", "), bcc: m.bcc.join(", "), subject: m.subject, body: m.body }); render(window.__items || [], true); } }, T("edit")),
+      el("button", { onclick: () => startEditing(item, { to: m.to.join(", "), cc: m.cc.join(", "), bcc: m.bcc.join(", "), subject: m.subject, body: m.body }) }, T("edit")),
       el("button", { onclick: () => decide(item.id, "reject") }, T("dont_send"))));
   }
   if (errors.has(item.id)) card.append(el("div", { class: "err" }, errors.get(item.id)));
   return card;
 }
+
+const byRule = (rule) => !rule || rule.agent === "any" ? ""
+  : " · " + (rule.subject ? T("by_rule_subject", { agent: rule.agent, subject: rule.subject }) : T("by_rule", { agent: rule.agent }));
 
 function historyRow(item) {
   if (item.action) {
@@ -279,22 +283,54 @@ function historyRow(item) {
   const m = item.message;
   return el("div", { class: "card done" },
     el("div", { class: "ell" }, el("span", { class: "subject" }, m.subject), " → ", m.to.join(", "), item.edited ? T("edited_suffix") : ""),
-    el("div", { class: "s " + item.status }, (item.auto && item.status === "sent" ? T("status_sent_auto") : I18N["confirm.status_" + item.status] || item.status), item.error ? `: ${item.error}` : ""));
+    el("div", { class: "s " + item.status }, (item.auto && item.status === "sent" ? T("status_sent_auto") + byRule(item.rule) : I18N["confirm.status_" + item.status] || item.status), item.error ? `: ${item.error}` : ""));
 }
 
+// The countdown and its pause button. A paused question waits for the user (up to 30 minutes).
+function clock(item) {
+  const label = item.paused ? T("paused_left", { n: item.seconds_left }) : T("seconds", { n: item.seconds_left });
+  return el("span", { class: "clock", "data-id": item.id },
+    el("span", { class: "timer" + (!item.paused && item.seconds_left <= 10 ? " low" : "") }, label),
+    el("button", { class: "pause", onclick: () => hold(item.id, !item.paused) }, item.paused ? T("resume") : T("pause")));
+}
+
+async function hold(id, paused) {
+  try {
+    await fetch(base + "api/hold", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, paused }) });
+  } catch (e) { /* the next refresh shows the state */ }
+  refresh();  // only the clock changes: the card keeps its scroll position
+}
+
+// Editing pauses the countdown, so the time runs out neither while typing nor reading.
+const autoPaused = new Set();
+function startEditing(item, draft) {
+  editing.set(item.id, draft);
+  if (!item.paused) { autoPaused.add(item.id); hold(item.id, true); }
+  render(window.__items || [], true);
+}
+function stopEditing(id) {
+  editing.delete(id);
+  if (autoPaused.delete(id)) hold(id, false);
+  render(window.__items || [], true);
+}
+
+let lastSignature = "";
 function render(items, force) {
   window.__items = items;
   const pending = items.filter(i => i.status === "pending");
   const ids = pending.map(i => i.id).join(",");
   const pendingBox = document.getElementById("pending");
-  // While the user edits, only the timers move: re-rendering would steal the cursor. `force`: the user opened or left an editor.
-  if (!force && ids === lastPendingIds && editing.size) {
+  // Cards are rebuilt only when something in them changed, not every second for the countdown: a rebuild would
+  // reset the scroll position of a long message and steal the cursor from an editor. `force`: the user acted.
+  const signature = JSON.stringify([pending.map(i => ({ ...i, seconds_left: 0, paused: false })), [...errors], [...editing.keys()]]);
+  if (!force && (signature === lastSignature || (ids === lastPendingIds && editing.size))) {
     for (const i of pending) {
-      const t = pendingBox.querySelector(`.timer[data-id="${i.id}"]`);
-      if (t) { t.textContent = T("seconds", { n: i.seconds_left }); t.className = "timer" + (i.seconds_left <= 10 ? " low" : ""); }
+      const c = pendingBox.querySelector(`.clock[data-id="${i.id}"]`);
+      if (c) c.replaceWith(clock(i));
     }
   } else {
     pendingBox.replaceChildren(...(pending.length ? pending.map(pendingCard) : [el("div", { class: "empty" }, T("empty"))]));
+    lastSignature = signature;
   }
   lastPendingIds = ids;
   for (const id of [...editing.keys()]) if (!pending.some(i => i.id === id)) editing.delete(id);

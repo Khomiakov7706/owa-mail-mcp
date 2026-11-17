@@ -26,6 +26,7 @@ class ConfirmationUI:
         self._app = LocalWebApp(lambda: render_page("confirm_page.html", current_language()), host=host, port=port)
         self._app.get("api/pending", lambda: (200, {"items": broker.snapshot()}))
         self._app.post("api/decide", self._decide)
+        self._app.post("api/hold", self._hold)
 
     @property
     def url(self) -> str:
@@ -54,6 +55,12 @@ class ConfirmationUI:
                 print(f"owa-mail-mcp: {t('cli.confirm_open')}: {self.url}", file=sys.stderr, flush=True)
                 return True
             return self._app.open_in_browser(t("cli.confirm_open"))
+
+    def _hold(self, data: dict[str, Any]) -> tuple[int, Any]:
+        error = self.broker.hold(str(data["id"]), bool(data.get("paused")))
+        if error:
+            return 409, {"error": error, "code": getattr(error, "code", "")}
+        return 200, {"ok": True}
 
     def _decide(self, data: dict[str, Any]) -> tuple[int, Any]:
         proposal_id = str(data["id"])

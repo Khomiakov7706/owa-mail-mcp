@@ -921,7 +921,7 @@ wheels = [
 
 [[package]]
 name = "owa-mail-mcp"
-version = "0.9.1"
+version = "0.10.0"
 source = { editable = "." }
 dependencies = [
     { name = "exchangelib" },

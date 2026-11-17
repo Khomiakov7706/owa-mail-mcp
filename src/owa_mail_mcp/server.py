@@ -52,6 +52,7 @@ Access to the user's Exchange / OWA mailbox and calendar. Sending, forwarding an
 - Organizing: `create_draft` saves to Drafts for the user to send themselves (prefer it when they want to review the text); `update_messages` marks read/unread, flags, categories; `move_messages` moves to a folder or archive (`list_folders` gives the paths); `delete_messages` moves to Deleted Items. Moved messages get new ids. Act only on what the user asked for.
 - `forward_email` forwards a message with its attachments; it follows the same rules as send_email.
 - For bold, lists or links pass `format: "markdown"` to send_email, forward_email or create_draft and write Markdown; the server builds safe HTML. Never write HTML tags: they are shown as text. Use formatting only where it helps; plain text is the default.
+- Sending without the window: the user may allow it in setup for a general trusted list, or by a rule for your MCP client alone (recipients, and words the subject must contain); `get_status` shows `trusted_rules_for_you`. Such a rule is for what the user agreed to with you, for example a recurring report on a set topic: keep track of that agreement yourself, put the rule's words in the subject, and never use a rule for anything else. The result names the rule it went under (`trusted_rule`).
 - Send only when the user asked for this message in this conversation. Take addresses from find_people or from the messages themselves, never guess them. The window shows the message, flags external recipients and lets the user edit it. Say a message was sent only when `send_email` returned `sent: true`; if the user edited it, tell them what was actually sent. After a refusal or a timeout nothing was sent: do not retry unless the user asks again.
 """
 
@@ -192,9 +193,10 @@ class MailTools:
             return {**previous[1], "duplicate": True}
 
         client = _client_name(ctx)
-        trusted = self._trusted(message, review)
+        trusted = self._trusted(message, review, client)
         if trusted:
-            proposal = self.broker.record_trusted(message, review, client=client, sender=me or "", reply_context=reply_context)
+            proposal = self.broker.record_trusted(message, review, client=client, sender=me or "", reply_context=reply_context,
+                                                  rule=trusted)
             self._trusted_sends.append(time.monotonic())
             status, opened = Status.APPROVED, True
         else:
@@ -239,6 +241,8 @@ class MailTools:
             "subject": final.message.subject,
             "external_recipients": final.review.external,
         }
+        if trusted:
+            result["trusted_rule"] = trusted
         if final.edited:
             result["body"] = final.message.body
         if sent_id:
@@ -277,17 +281,18 @@ class MailTools:
             message.subject = prefix + original.subject
         return context
 
-    def _trusted(self, message: Outgoing, review) -> bool:
-        """Every recipient is on the user's list, nothing in the text needs a look, and the hourly budget is not spent."""
-        trusted = {a.lower() for a in self.settings.trusted_recipients}
-        everyone = message.to + message.cc + message.bcc
-        if not trusted or not everyone or any(e.lower() not in trusted for e in everyone):
-            return False
+    def _trusted(self, message: Outgoing, review, client: str) -> dict[str, Any] | None:
+        """The user's permission that lets this message skip the window, or None: every recipient is on the general
+        trusted list or in one rule for this agent (whose subject words the subject contains), nothing in the text needs
+        a look, and the hourly budget is not spent."""
+        rule = matching_rule(self.settings, message, client)
+        if rule is None:
+            return None
         if any(getattr(w, "code", "") in ("invisible", "link_mismatch") for w in review.warnings):
-            return False
+            return None
         hour_ago = time.monotonic() - 3600
         self._trusted_sends = [t for t in self._trusted_sends if t > hour_ago]
-        return len(self._trusted_sends) < self.settings.trusted_per_hour
+        return rule if len(self._trusted_sends) < self.settings.trusted_per_hour else None
 
     async def _await_answer(self, ctx: Context | None, proposal_id: str) -> Status:
         status = Status.PENDING
@@ -544,6 +549,21 @@ class MailTools:
             del self._recent_sends[key]
 
 
+def matching_rule(settings: Settings, message: Outgoing, client: str) -> dict[str, Any] | None:
+    """Which of the user's permissions covers every recipient of this message from this agent, if any."""
+    everyone = {e.lower() for e in message.to + message.cc + message.bcc}
+    if not everyone:
+        return None
+    if everyone <= {a.lower() for a in settings.trusted_recipients}:
+        return {"agent": "any", "subject": ""}
+    agent = " ".join(client.split()).casefold()
+    for rule in settings.trusted_rules:
+        if (agent and rule["agent"].casefold() == agent and everyone <= {a.lower() for a in rule["recipients"]}
+                and rule["subject"].casefold() in message.subject.casefold()):
+            return {"agent": rule["agent"], "subject": rule["subject"]}
+    return None
+
+
 def _reset_note(settings: Settings) -> str:
     if not settings.tampered:
         return ""
@@ -736,7 +756,7 @@ def build_server(
     mcp._owa_tools = tools  # type: ignore[attr-defined]  # for the resolvers
 
     @mcp.tool(title="Mailbox status", annotations=READ_ONLY)
-    async def get_status() -> dict[str, Any]:
+    async def get_status(ctx: Context = None) -> dict[str, Any]:  # type: ignore[assignment]
         """Who the user is (their own address and name: never send to them by mistake, tell them apart from namesakes), the current local time, how many unread messages the Inbox has, and whether sending is enabled. Call first when you need today's date or want to check the mailbox is reachable."""
         me = await tools.run(tools.backend.whoami)
         tools._me = tools._me or me.email
@@ -755,6 +775,8 @@ def build_server(
             "calendar_changes_confirmed_in": settings.calendar_confirm,
             "organizing_enabled": settings.allow_organize,
             "trusted_recipients": list(settings.trusted_recipients),
+            "trusted_rules_for_you": [{"recipients": r["recipients"], "subject_must_contain": r["subject"]}
+                                      for r in settings.trusted_rules if r["agent"].casefold() == " ".join(_client_name(ctx).split()).casefold()],
             "blocked_reason": tools.guard.blocked_reason,
             "version": __version__,
             "restart_needed": code_updated_since_start(),

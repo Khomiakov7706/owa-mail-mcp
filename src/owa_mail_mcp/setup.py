@@ -172,6 +172,7 @@ class SetupApp:
                 "calendar_enabled": settings.calendar_enabled,
                 "calendar_confirm": settings.calendar_confirm,
                 "trusted_recipients": "\n".join(settings.trusted_recipients),
+                "trusted_rules": [{**r, "recipients": "\n".join(r["recipients"])} for r in settings.trusted_rules],
                 "internal_domains": ", ".join(settings.internal_domains),
                 "confirm_timeout": settings.confirm_timeout,
             },
@@ -183,6 +184,7 @@ class SetupApp:
             "language": normalize(settings.language) or "",
             "languages": LANGUAGES,
             "journal": read_journal(20),
+            "known_agents": known_agents(settings),
             "standalone": self._on_done is not None,
         }
 
@@ -334,10 +336,14 @@ class SetupApp:
         bad = [a for a in trusted if not is_valid_address(a)]
         if bad:
             return 200, {"ok": False, "error": t("msg.trusted_invalid", list=", ".join(bad[:5]))}
+        rules, error = parse_rules(data.get("trusted_rules"))
+        if error:
+            return 200, {"ok": False, "error": error}
         with self._lock:
             settings = Settings.load(with_password=False)
             save_settings(replace(settings, allow_send=bool(data.get("allow_send")), allow_calendar=bool(data.get("allow_calendar")),
                                   allow_organize=bool(data.get("allow_organize")), trusted_recipients=tuple(trusted),
+                                  trusted_rules=rules if rules is not None else settings.trusted_rules,
                                   calendar_enabled=bool(data.get("calendar_enabled", settings.calendar_enabled)),
                                   calendar_confirm="chat" if data.get("calendar_confirm", settings.calendar_confirm) == "chat" else "window",
                                   internal_domains=domains, confirm_timeout=timeout))
@@ -512,3 +518,36 @@ def run_setup(open_browser: bool = True) -> None:
         pass
     finally:
         app.stop()
+
+
+def parse_rules(raw: Any) -> tuple[tuple[dict, ...] | None, str | None]:
+    """The rules typed in the setup window, checked: (rules, None), or (None, the error to show). None rules: not sent."""
+    if raw is None:
+        return None, None
+    if not isinstance(raw, list) or len(raw) > 20:
+        return None, t("msg.rule_invalid", n=1, reason=t("msg.rule_too_many"))
+    out = []
+    for n, rule in enumerate(raw, 1):
+        rule = rule if isinstance(rule, dict) else {}
+        agent = " ".join(str(rule.get("agent") or "").split())
+        recipients = parse_addresses(str(rule.get("recipients") or ""))
+        subject = " ".join(str(rule.get("subject") or "").split())
+        if not agent and not recipients and not subject:
+            continue  # an empty row the user has not filled in yet
+        if not agent:
+            return None, t("msg.rule_invalid", n=n, reason=t("msg.rule_no_agent"))
+        if not recipients:
+            return None, t("msg.rule_invalid", n=n, reason=t("msg.rule_no_recipients"))
+        bad = [a for a in recipients if not is_valid_address(a)]
+        if bad:
+            return None, t("msg.rule_invalid", n=n, reason=t("msg.trusted_invalid", list=", ".join(bad[:5])))
+        if len(agent) > 80 or len(subject) > 200:
+            return None, t("msg.rule_invalid", n=n, reason=t("msg.rule_too_long"))
+        out.append({"agent": agent, "recipients": recipients, "subject": subject})
+    return tuple(out), None
+
+
+def known_agents(settings: Settings) -> list[str]:
+    """Names of the MCP clients that have called this server, for the rule editor's suggestions."""
+    names = [str(e.get("client") or "") for e in read_journal(500)] + [r["agent"] for r in settings.trusted_rules]
+    return sorted({n for n in names if n}, key=str.casefold)
