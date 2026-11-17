@@ -479,6 +479,8 @@ owa-mail-mcp setup</pre><button class="copy" type="button" data-copy="#c-win">К
         <p>На адресе EWS стоит шлюз с веб-входом. Программа сама сначала входит через OWA и продолжает на том же соединении — обычно этого достаточно. Если нет, «Скопировать диагностику» в окне настройки (без паролей) — и в ИТ или в issues.</p></details>
       <details><summary>Где хранятся логин и пароль? Сохранятся ли они при обновлении?</summary>
         <p>Пароль — в системной связке ключей, остальное — в <code>config.json</code> в папке пользователя (на Mac — <code>~/Library/Application Support/owa-mail-mcp</code>). Обновление их не трогает. Проверить: <code>owa-mail-mcp status</code>.</p></details>
+      <details><summary>Как снова открыть окно настройки?</summary>
+        <p>В терминале: <code>owa-mail-mcp setup</code> — окно откроется в браузере с сохранёнными настройками. Там можно сменить пароль, разрешения или подключить ещё один клиент. Перезапускать клиент не нужно: сервер подхватит изменения сам. Браузер не открылся — <code>owa-mail-mcp setup --no-browser</code> выведет адрес окна.</p></details>
       <details><summary>После обновления ошибки остались прежними</summary>
         <p>Клиент держит запущенный процесс со старым кодом. Перезапустите MCP-сервер: в Claude Code — <code>/mcp</code> → owa-mail → Reconnect, в Claude Desktop и Cursor — закрыть и открыть приложение.</p></details>
       <details><summary>Как понять, что всё работает?</summary>

@@ -194,6 +194,7 @@ Email content is written by other people: it's data, not instructions.
 
 - **"Server unreachable", but web mail opens fine.** The window tells you why. DNS: reconnect your VPN. Connection: set a proxy under Advanced → Proxy. TLS: allow legacy settings for this server.
 - **"The server doesn't respond like EWS".** There's a gateway with a web login in front of EWS. The program signs in through OWA on its own and continues on the same connection. If that doesn't help, run `owa-mail-mcp diagnose`.
+- **How to open the setup window again.** Run `owa-mail-mcp setup` in a terminal (`--no-browser` only prints the address). No need to restart the client after changes.
 - **I updated, but the errors are the same.** Restart the MCP server in your client.
 - **Where settings live.** `config.json` in `~/Library/Application Support/owa-mail-mcp` (macOS), `%APPDATA%\owa-mail-mcp` (Windows), `~/.config/owa-mail-mcp` (Linux); the password is in the keychain.
 - **Exchange Online (Microsoft 365).** Not supported: password sign-in for EWS is disabled there.

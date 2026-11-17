@@ -462,6 +462,8 @@ Don't ask me for my password — I'll type it myself in the setup window.</pre><
         <p>There’s a gateway with a web login in front of EWS. The program first signs in through OWA and continues on the same connection — that’s usually enough. If not, use Copy diagnostics in the setup window (no passwords included) and send it to IT or open an issue.</p></details>
       <details><summary>Where are my login and password stored? Do they survive updates?</summary>
         <p>The password is in the system keychain; everything else is in <code>config.json</code> in your user folder (on a Mac, <code>~/Library/Application Support/owa-mail-mcp</code>). Updates don’t touch them. To check: <code>owa-mail-mcp status</code>.</p></details>
+      <details><summary>How do I open the setup window again?</summary>
+        <p>In a terminal: <code>owa-mail-mcp setup</code> — the window opens in your browser with your saved settings. There you can change the password or permissions, or connect another client. No need to restart the client: the server picks up changes on its own. If the browser doesn’t open, <code>owa-mail-mcp setup --no-browser</code> prints the window’s address.</p></details>
       <details><summary>I updated, but the errors are the same</summary>
         <p>Your client is still running the old process. Restart the MCP server: in Claude Code, <code>/mcp</code> → owa-mail → Reconnect; in Claude Desktop and Cursor, quit and reopen the app.</p></details>
       <details><summary>How do I know it’s working?</summary>
